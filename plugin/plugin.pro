@@ -5,7 +5,7 @@ CONFIG += plugin link_pkgconfig c++11
 PKGCONFIG += nymea
 
 QT -= gui
-QT += network
+QT += network sql
 
 include(../config.pri)
 
@@ -14,10 +14,12 @@ LIBS += -L$$top_builddir/libnymea-energy -lnymea-energy
 
 HEADERS += experiencepluginenergy.h \
     energyjsonhandler.h \
+    energylogger.h \
     energymanagerimpl.h
 
 SOURCES += experiencepluginenergy.cpp \
     energyjsonhandler.cpp \
+    energylogger.cpp \
     energymanagerimpl.cpp
 
 target.path = $$[QT_INSTALL_LIBS]/nymea/experiences/

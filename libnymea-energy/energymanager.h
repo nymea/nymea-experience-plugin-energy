@@ -32,9 +32,12 @@
 #ifndef ENERGYMANAGER_H
 #define ENERGYMANAGER_H
 
+#include "energylogs.h"
+
 #include <QObject>
 
 #include <integrations/thing.h>
+
 
 class EnergyManager : public QObject
 {
@@ -47,6 +50,7 @@ public:
     };
     Q_ENUM(EnergyError)
 
+
     explicit EnergyManager(QObject *parent = nullptr);
     virtual ~EnergyManager() = default;
 
@@ -56,6 +60,9 @@ public:
     virtual double currentPowerConsumption() const = 0;
     virtual double currentPowerProduction() const = 0;
     virtual double currentPowerAcquisition() const = 0;
+    virtual double currentPowerStorage() const = 0;
+
+    virtual EnergyLogs* logs() const = 0;
 
 signals:
     void rootMeterChanged();

@@ -9,6 +9,8 @@
 
 #include "energymanager.h"
 
+class EnergyLogger;
+
 class EnergyManagerImpl : public EnergyManager
 {
     Q_OBJECT
@@ -21,6 +23,9 @@ public:
     double currentPowerConsumption() const override;
     double currentPowerProduction() const override;
     double currentPowerAcquisition() const override;
+    double currentPowerStorage() const override;
+
+    EnergyLogs* logs() const override;
 
 private:
     void watchThing(Thing *thing);
@@ -40,6 +45,9 @@ private:
     double m_currentPowerConsumption;
     double m_currentPowerProduction;
     double m_currentPowerAcquisition;
+    double m_currentPowerStorage;
+
+    EnergyLogger *m_logger = nullptr;
 };
 
 #endif // ENERGYMANAGERIMPL_H

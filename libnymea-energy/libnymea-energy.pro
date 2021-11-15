@@ -9,10 +9,12 @@ PKGCONFIG += nymea
 
 
 HEADERS += \
+    energylogs.h \
     energymanager.h \
     energyplugin.h
 
 SOURCES += \
+    energylogs.cpp \
     energymanager.cpp \
     energyplugin.cpp
 
