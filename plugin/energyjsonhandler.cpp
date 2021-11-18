@@ -32,6 +32,7 @@ EnergyJsonHandler::EnergyJsonHandler(EnergyManager *energyManager, QObject *pare
     returns.insert("currentPowerConsumption", enumValueName(Double));
     returns.insert("currentPowerProduction", enumValueName(Double));
     returns.insert("currentPowerAcquisition", enumValueName(Double));
+    returns.insert("currentPowerStorage", enumValueName(Double));
     registerMethod("GetPowerBalance", description, params, returns);
 
     params.clear(); returns.clear();
@@ -65,6 +66,7 @@ EnergyJsonHandler::EnergyJsonHandler(EnergyManager *energyManager, QObject *pare
     params.insert("currentPowerConsumption", enumValueName(Double));
     params.insert("currentPowerProduction", enumValueName(Double));
     params.insert("currentPowerAcquisition", enumValueName(Double));
+    params.insert("currentPowerStorage", enumValueName(Double));
     registerNotification("PowerBalanceChanged", description, params);
 
     params.clear();
@@ -92,6 +94,7 @@ EnergyJsonHandler::EnergyJsonHandler(EnergyManager *energyManager, QObject *pare
         params.insert("currentPowerConsumption", m_energyManager->currentPowerConsumption());
         params.insert("currentPowerProduction", m_energyManager->currentPowerProduction());
         params.insert("currentPowerAcquisition", m_energyManager->currentPowerAcquisition());
+        params.insert("currentPowerStorage", m_energyManager->currentPowerStorage());
         emit PowerBalanceChanged(params);
     });
 
@@ -145,6 +148,7 @@ JsonReply *EnergyJsonHandler::GetPowerBalance(const QVariantMap &params)
     ret.insert("currentPowerConsumption", m_energyManager->currentPowerConsumption());
     ret.insert("currentPowerProduction", m_energyManager->currentPowerProduction());
     ret.insert("currentPowerAcquisition", m_energyManager->currentPowerAcquisition());
+    ret.insert("currentPowerStorage", m_energyManager->currentPowerStorage());
     return createReply(ret);
 }
 
