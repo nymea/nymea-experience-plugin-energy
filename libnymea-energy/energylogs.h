@@ -20,6 +20,7 @@ public:
     virtual ~EnergyLogs() = default;
 
     enum SampleRate {
+        SampleRateAny = 0,
         SampleRate1Min = 1,
         SampleRate15Mins = 15,
         SampleRate1Hour = 60,
@@ -57,20 +58,33 @@ class PowerBalanceLogEntry
     Q_PROPERTY(double production READ production)
     Q_PROPERTY(double acquisition READ acquisition)
     Q_PROPERTY(double storage READ storage)
+    Q_PROPERTY(double totalConsumption READ totalConsumption)
+    Q_PROPERTY(double totalProduction READ totalProduction)
+    Q_PROPERTY(double totalAcquisition READ totalAcquisition)
+    Q_PROPERTY(double totalReturn READ totalReturn)
 public:
     PowerBalanceLogEntry();
-    PowerBalanceLogEntry(const QDateTime &timestamp, double consumption, double production, double acquisition, double storage);
+    PowerBalanceLogEntry(const QDateTime &timestamp, double consumption, double production, double acquisition, double storage, double totalConsumption, double totalProduction, double totalAcquisition, double totalReturn);
     QDateTime timestamp() const;
     double consumption() const;
     double production() const;
     double acquisition() const;
     double storage() const;
+    double totalConsumption() const;
+    double totalProduction() const;
+    double totalAcquisition() const;
+    double totalReturn() const;
+
 private:
     QDateTime m_timestamp;
     double m_consumption = 0;
     double m_production = 0;
     double m_acquisition = 0;
     double m_storage = 0;
+    double m_totalConsumption = 0;
+    double m_totalProduction = 0;
+    double m_totalAcquisition = 0;
+    double m_totalReturn = 0;
 };
 Q_DECLARE_METATYPE(PowerBalanceLogEntry)
 

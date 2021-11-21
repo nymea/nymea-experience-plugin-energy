@@ -33,6 +33,10 @@ EnergyJsonHandler::EnergyJsonHandler(EnergyManager *energyManager, QObject *pare
     returns.insert("currentPowerProduction", enumValueName(Double));
     returns.insert("currentPowerAcquisition", enumValueName(Double));
     returns.insert("currentPowerStorage", enumValueName(Double));
+    returns.insert("totalConsumption", enumValueName(Double));
+    returns.insert("totalProduction", enumValueName(Double));
+    returns.insert("totalAcquisition", enumValueName(Double));
+    returns.insert("totalReturn", enumValueName(Double));
     registerMethod("GetPowerBalance", description, params, returns);
 
     params.clear(); returns.clear();
@@ -67,6 +71,10 @@ EnergyJsonHandler::EnergyJsonHandler(EnergyManager *energyManager, QObject *pare
     params.insert("currentPowerProduction", enumValueName(Double));
     params.insert("currentPowerAcquisition", enumValueName(Double));
     params.insert("currentPowerStorage", enumValueName(Double));
+    params.insert("totalConsumption", enumValueName(Double));
+    params.insert("totalProduction", enumValueName(Double));
+    params.insert("totalAcquisition", enumValueName(Double));
+    params.insert("totalReturn", enumValueName(Double));
     registerNotification("PowerBalanceChanged", description, params);
 
     params.clear();
@@ -95,6 +103,10 @@ EnergyJsonHandler::EnergyJsonHandler(EnergyManager *energyManager, QObject *pare
         params.insert("currentPowerProduction", m_energyManager->currentPowerProduction());
         params.insert("currentPowerAcquisition", m_energyManager->currentPowerAcquisition());
         params.insert("currentPowerStorage", m_energyManager->currentPowerStorage());
+        params.insert("totalConsumption", m_energyManager->totalConsumption());
+        params.insert("totalProduction", m_energyManager->totalProduction());
+        params.insert("totalAcquisition", m_energyManager->totalAcquisition());
+        params.insert("totalReturn", m_energyManager->totalReturn());
         emit PowerBalanceChanged(params);
     });
 
@@ -149,16 +161,17 @@ JsonReply *EnergyJsonHandler::GetPowerBalance(const QVariantMap &params)
     ret.insert("currentPowerProduction", m_energyManager->currentPowerProduction());
     ret.insert("currentPowerAcquisition", m_energyManager->currentPowerAcquisition());
     ret.insert("currentPowerStorage", m_energyManager->currentPowerStorage());
+    ret.insert("totalConsumption", m_energyManager->totalConsumption());
+    ret.insert("totalProduction", m_energyManager->totalProduction());
+    ret.insert("totalAcquisition", m_energyManager->totalAcquisition());
+    ret.insert("totalReturn", m_energyManager->totalReturn());
     return createReply(ret);
 }
 
 JsonReply *EnergyJsonHandler::GetPowerBalanceLogs(const QVariantMap &params)
 {
-    qCDebug(dcEnergyExperience()) << "params" << params;
-    qCDebug(dcEnergyExperience()) << "from" << params.value("from");
     EnergyLogs::SampleRate sampleRate = enumNameToValue<EnergyLogs::SampleRate>(params.value("sampleRate").toString());
     QDateTime from = params.contains("from") ? QDateTime::fromMSecsSinceEpoch(params.value("from").toLongLong() * 1000) : QDateTime();
-    qCDebug(dcEnergyExperience()) << "from2" << from;
     QDateTime to = params.contains("to") ? QDateTime::fromMSecsSinceEpoch(params.value("to").toLongLong() * 1000) : QDateTime();
     QVariantMap returns;
     returns.insert("powerBalanceLogEntries", pack(m_energyManager->logs()->powerBalanceLogs(sampleRate, from, to)));

@@ -8,6 +8,7 @@
 #include <QObject>
 #include <QDateTime>
 #include <QSqlDatabase>
+#include <QSqlResult>
 #include <QTimer>
 #include <QMap>
 
@@ -17,11 +18,13 @@ class EnergyLogger : public EnergyLogs
 public:
     explicit EnergyLogger(QObject *parent = nullptr);
 
-    void logPowerBalance(double consumption, double production, double acquisition, double storage);
+    void logPowerBalance(double consumption, double production, double acquisition, double storage, double totalConsumption, double totalProduction, double totalAcquisition, double totalReturn);
     void logThingPower(const ThingId &thingId, double currentPower, double totalConsumption, double totalProduction);
 
     PowerBalanceLogEntries powerBalanceLogs(SampleRate sampleRate, const QDateTime &from = QDateTime(), const QDateTime &to = QDateTime()) const override;
     ThingPowerLogEntries thingPowerLogs(SampleRate sampleRate, const QList<ThingId> &thingIds, const QDateTime &from = QDateTime(), const QDateTime &to = QDateTime()) const override;
+
+    PowerBalanceLogEntry latestLogEntry(SampleRate sampleRate);
 
 private slots:
     void sample();
@@ -40,12 +43,14 @@ private:
     void rectifySamples(SampleRate sampleRate, EnergyLogger::SampleRate baseSampleRate);
 
     bool samplePowerBalance(SampleRate sampleRate, SampleRate baseSampleRate, const QDateTime &sampleEnd);
-    bool insertPowerBalance(const QDateTime &timestamp, SampleRate sampleRate, double consumption, double production, double acquisition, double storage);
+    bool insertPowerBalance(const QDateTime &timestamp, SampleRate sampleRate, double consumption, double production, double acquisition, double storage, double totalConsumption, double totalProduction, double totalAcquisition, double totalReturn);
     bool sampleThingsPower(SampleRate sampleRate, SampleRate baseSampleRate, const QDateTime &sampleEnd);
     bool sampleThingPower(const ThingId &thingId, SampleRate sampleRate, SampleRate baseSampleRate, const QDateTime &sampleEnd);
     bool insertThingPower(const QDateTime &timestamp, SampleRate sampleRate, const ThingId &thingId, double currentPower, double totalConsumption, double totalProduction);
     void trimPowerBalance(SampleRate sampleRate, const QDateTime &beforeTime);
     void trimThingPower(const ThingId &thingId, SampleRate sampleRate, const QDateTime &beforeTime);
+
+    PowerBalanceLogEntry queryResultToBalanceLogEntry(const QSqlRecord &record) const;
 
 private:
     struct SampleConfig {
@@ -58,6 +63,11 @@ private:
 
     QTimer m_sampleTimer;
     QHash<SampleRate, QDateTime> m_nextSamples;
+
+    double m_lastSampleTotalConsumption = 0;
+    double m_lastSampleTotalProducation = 0;
+    double m_lastSampleTotalAcquisition = 0;
+    double m_lastSampleTotalReturn = 0;
 
     QSqlDatabase m_db;
 

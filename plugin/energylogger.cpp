@@ -6,6 +6,7 @@
 #include <QDir>
 #include <QSqlQuery>
 #include <QSqlError>
+#include <QSqlRecord>
 #include <QSettings>
 
 #include <QLoggingCategory>
@@ -53,7 +54,6 @@ EnergyLogger::EnergyLogger(QObject *parent) : EnergyLogs(parent)
     }
 
     // Start the scheduling
-
     scheduleNextSample(SampleRate1Min);
     foreach (SampleRate sampleRate, m_configs.keys()) {
         scheduleNextSample(sampleRate);
@@ -71,9 +71,9 @@ EnergyLogger::EnergyLogger(QObject *parent) : EnergyLogs(parent)
     m_sampleTimer.start(1000);
 }
 
-void EnergyLogger::logPowerBalance(double consumption, double production, double acquisition, double storage)
+void EnergyLogger::logPowerBalance(double consumption, double production, double acquisition, double storage, double totalConsumption, double totalProduction, double totalAcquisition, double totalReturn)
 {
-    PowerBalanceLogEntry entry(QDateTime::currentDateTime(), consumption, production, acquisition, storage);
+    PowerBalanceLogEntry entry(QDateTime::currentDateTime(), consumption, production, acquisition, storage, totalConsumption, totalProduction, totalAcquisition, totalReturn);
 
     // Add everything to livelog, keep that for one day, in memory only
     m_balanceLiveLog.prepend(entry);
@@ -124,8 +124,8 @@ PowerBalanceLogEntries EnergyLogger::powerBalanceLogs(SampleRate sampleRate, con
     }
 
     while (query.next()) {
-        qCDebug(dcEnergyExperience()) << "Adding result";
-        result.append(PowerBalanceLogEntry(QDateTime::fromMSecsSinceEpoch(query.value("timestamp").toLongLong()), query.value("consumption").toDouble(), query.value("production").toDouble(), query.value("acquisition").toDouble(), query.value("storage").toDouble()));
+//        qCDebug(dcEnergyExperience()) << "Adding result";
+        result.append(queryResultToBalanceLogEntry(query.record()));
     }
     return result;
 }
@@ -178,6 +178,33 @@ ThingPowerLogEntries EnergyLogger::thingPowerLogs(SampleRate sampleRate, const Q
 
 }
 
+PowerBalanceLogEntry EnergyLogger::latestLogEntry(SampleRate sampleRate)
+{
+    QSqlQuery query(m_db);
+    QString queryString = "SELECT MAX(timestamp), consumption, production, acquisition, storage, totalConsumption, totalProduction, totalAcquisition, totalReturn FROM powerBalance";
+    QVariantList bindValues;
+    if (sampleRate != SampleRateAny) {
+        queryString += " WHERE sampleRate = ?";
+        bindValues.append(sampleRate);
+    }
+    queryString += ";";
+    query.prepare(queryString);
+    foreach (const QVariant &value, bindValues) {
+        query.addBindValue(value);
+    }
+    query.exec();
+    if (query.lastError().isValid()) {
+        qCWarning(dcEnergyExperience()) << "Error obtaining latest log entry from DB:" << query.lastError() << query.executedQuery();
+        return PowerBalanceLogEntry();
+    }
+    if (!query.next()) {
+        qCDebug(dcEnergyExperience()) << "No power balance log entry in DB for sample rate:" << sampleRate;
+        return PowerBalanceLogEntry();
+    }
+    qCDebug(dcEnergyExperience()) << "Loaded latest log entry:" << query.record();
+    return queryResultToBalanceLogEntry(query.record());
+}
+
 void EnergyLogger::sample()
 {
     QDateTime now = QDateTime::currentDateTime();
@@ -210,8 +237,19 @@ void EnergyLogger::sample()
         medianProduction /= sampleStart.msecsTo(sampleEnd);
         medianAcquisition /= sampleStart.msecsTo(sampleEnd);
         medianStorage /= sampleStart.msecsTo(sampleEnd);
+
+        PowerBalanceLogEntry newest = m_balanceLiveLog.count() > 0 ? m_balanceLiveLog.at(0) : PowerBalanceLogEntry();
+        double totalConsumption = newest.totalConsumption();
+        double totalProduction = newest.totalProduction();
+        double totalAcquisition = newest.totalAcquisition();
+        double totalReturn = newest.totalReturn();
+
         qCDebug(dcEnergyExperience()) << "Power balance for sample:" << medianConsumption << medianProduction << medianAcquisition << medianStorage << "duration:" << sampleStart.msecsTo(sampleEnd);
-        insertPowerBalance(sampleEnd, SampleRate1Min, medianConsumption, medianProduction, medianAcquisition, medianStorage);
+        insertPowerBalance(sampleEnd, SampleRate1Min, medianConsumption, medianProduction, medianAcquisition, medianStorage, totalConsumption, totalProduction, totalAcquisition, totalReturn);
+        m_lastSampleTotalConsumption = totalConsumption;
+        m_lastSampleTotalProducation = totalProduction;
+        m_lastSampleTotalAcquisition = totalAcquisition;
+        m_lastSampleTotalReturn = totalReturn;
 
         foreach (const ThingId &thingId, m_thingsPowerLiveLogs.keys()) {
             medianConsumption = 0;
@@ -307,7 +345,11 @@ bool EnergyLogger::initDB()
                   "consumption FLOAT,"
                   "production FLOAT,"
                   "acquisition FLOAT,"
-                  "storage FLOAT"
+                  "storage FLOAT,"
+                  "totalConsumption FLOAT,"
+                  "totalProduction FLOAT,"
+                  "totalAcquisition FLOAT,"
+                  "totalReturn FLOAT"
                   ");");
 
         if (m_db.lastError().isValid()) {
@@ -333,7 +375,7 @@ bool EnergyLogger::initDB()
         }
     }
 
-    qCDebug(dcEnergyExperience()) << "Initialized logging DB successfully.";
+    qCDebug(dcEnergyExperience()) << "Initialized logging DB successfully." << m_db.databaseName();
     return true;
 }
 
@@ -412,16 +454,16 @@ void EnergyLogger::rectifySamples(SampleRate sampleRate, SampleRate baseSampleRa
     QDateTime newestSample = getNewestPowerBalanceSampleTimestamp(sampleRate);
 
     qCDebug(dcEnergyExperience()) << "Checking for missing samples for" << sampleRate;
-    qCDebug(dcEnergyExperience()) << "Newest sample:" << newestSample.toString() << "Oldest base sample:" << oldestBaseSample.toString();
+//    qCDebug(dcEnergyExperience()) << "Newest sample:" << newestSample.toString() << "Oldest base sample:" << oldestBaseSample.toString();
     if (newestSample.isNull()) {
-        qCDebug(dcEnergyExperience()) << "No sample at all so far. Using base as starting point.";
+//        qCDebug(dcEnergyExperience()) << "No sample at all so far. Using base as starting point.";
         newestSample = oldestBaseSample;
     }
-    qCDebug(dcEnergyExperience()) << "next sample after last in series:" << nextSampleTimestamp(sampleRate, newestSample).toString();
-    qCDebug(dcEnergyExperience()) << "next scheduled sample:" << m_nextSamples.value(sampleRate).toString();
+//    qCDebug(dcEnergyExperience()) << "next sample after last in series:" << nextSampleTimestamp(sampleRate, newestSample).toString();
+//    qCDebug(dcEnergyExperience()) << "next scheduled sample:" << m_nextSamples.value(sampleRate).toString();
     while (!newestSample.isNull() && nextSampleTimestamp(sampleRate, newestSample) < m_nextSamples[sampleRate]) {
         QDateTime nextSample = nextSampleTimestamp(sampleRate, newestSample.addMSecs(1000));
-        qCDebug(dcEnergyExperience()) << "Rectifying missed sample for" << sampleRate << "from" << nextSample.toString();
+//        qCDebug(dcEnergyExperience()) << "Rectifying missed sample for" << sampleRate << "from" << nextSample.toString();
         samplePowerBalance(sampleRate, baseSampleRate, nextSample);
         newestSample = nextSample;
     }
@@ -430,17 +472,17 @@ void EnergyLogger::rectifySamples(SampleRate sampleRate, SampleRate baseSampleRa
         QDateTime oldestBaseSample = getOldestThingPowerSampleTimestamp(thingId, baseSampleRate);
         QDateTime newestSample = getNewestThingPowerSampleTimestamp(thingId, sampleRate);
 
-        qCDebug(dcEnergyExperience()) << "T Checking for missing samples for" << sampleRate;
-        qCDebug(dcEnergyExperience()) << "T Newest sample:" << newestSample.toString() << "Oldest base sample:" << oldestBaseSample.toString();
+//        qCDebug(dcEnergyExperience()) << "T Checking for missing samples for" << sampleRate;
+//        qCDebug(dcEnergyExperience()) << "T Newest sample:" << newestSample.toString() << "Oldest base sample:" << oldestBaseSample.toString();
         if (newestSample.isNull()) {
-            qCDebug(dcEnergyExperience()) << "T No sample at all so far. Using base as starting point.";
+//            qCDebug(dcEnergyExperience()) << "T No sample at all so far. Using base as starting point.";
             newestSample = oldestBaseSample;
         }
-        qCDebug(dcEnergyExperience()) << "T next sample after last in series:" << nextSampleTimestamp(sampleRate, newestSample).toString();
-        qCDebug(dcEnergyExperience()) << "T next scheduled sample:" << m_nextSamples.value(sampleRate).toString();
+//        qCDebug(dcEnergyExperience()) << "T next sample after last in series:" << nextSampleTimestamp(sampleRate, newestSample).toString();
+//        qCDebug(dcEnergyExperience()) << "T next scheduled sample:" << m_nextSamples.value(sampleRate).toString();
         while (!newestSample.isNull() && nextSampleTimestamp(sampleRate, newestSample) < m_nextSamples[sampleRate]) {
             QDateTime nextSample = nextSampleTimestamp(sampleRate, newestSample.addMSecs(1000));
-            qCDebug(dcEnergyExperience()) << "T Rectifying missed sample for" << sampleRate << "from" << nextSample.toString();
+//            qCDebug(dcEnergyExperience()) << "T Rectifying missed sample for" << sampleRate << "from" << nextSample.toString();
             sampleThingPower(thingId, sampleRate, baseSampleRate, nextSample);
             newestSample = nextSample;
         }
@@ -453,6 +495,9 @@ QDateTime EnergyLogger::nextSampleTimestamp(SampleRate sampleRate, const QDateTi
     QDate date = dateTime.date();
     QDateTime next;
     switch (sampleRate) {
+    case SampleRateAny:
+        qCWarning(dcEnergyExperience()) << "Cannot calculate next sample timestamp without a sample rate";
+        return QDateTime();
     case SampleRate1Min:
         time.setHMS(time.hour(), time.minute(), 0);
         next = QDateTime(date, time).addMSecs(60 * 1000);
@@ -512,12 +557,20 @@ bool EnergyLogger::samplePowerBalance(SampleRate sampleRate, SampleRate baseSamp
     double medianProduction = 0;
     double medianAcquisition = 0;
     double medianStorage = 0;
+    double totalConsumption = 0;
+    double totalProduction = 0;
+    double totalAcquisition = 0;
+    double totalReturn = 0;
     while (query.next()) {
         qCDebug(dcEnergyExperience()) << "Frame:" << query.value("consumption").toDouble() << query.value("production").toDouble() << query.value("acquisition").toDouble() << QDateTime::fromMSecsSinceEpoch(query.value("timestamp").toLongLong()).toString();
         medianConsumption += query.value("consumption").toDouble();
         medianProduction += query.value("production").toDouble();
         medianAcquisition += query.value("acquisition").toDouble();
         medianStorage += query.value("storage").toDouble();
+        totalConsumption = query.value("totalConsumption").toDouble();
+        totalProduction = query.value("totalProduction").toDouble();
+        totalAcquisition = query.value("totalAcquisition").toDouble();
+        totalReturn = query.value("totalReturn").toDouble();
     }
     qCDebug(dcEnergyExperience()) << "Totals:" << medianConsumption << medianProduction << medianAcquisition << medianStorage << "base samplerate" << baseSampleRate << "samplerate:" << sampleRate;
     medianConsumption = medianConsumption * baseSampleRate / sampleRate;
@@ -526,25 +579,29 @@ bool EnergyLogger::samplePowerBalance(SampleRate sampleRate, SampleRate baseSamp
     medianStorage = medianStorage * baseSampleRate / sampleRate;
 
     qCDebug(dcEnergyExperience()) << "Sampled:" << medianConsumption << medianProduction << medianAcquisition << medianStorage;
-    return insertPowerBalance(sampleEnd, sampleRate, medianConsumption, medianProduction, medianAcquisition, medianStorage);
+    return insertPowerBalance(sampleEnd, sampleRate, medianConsumption, medianProduction, medianAcquisition, medianStorage, totalConsumption, totalProduction, totalAcquisition, totalReturn);
 }
 
-bool EnergyLogger::insertPowerBalance(const QDateTime &timestamp, SampleRate sampleRate, double consumption, double production, double acquisition, double storage)
+bool EnergyLogger::insertPowerBalance(const QDateTime &timestamp, SampleRate sampleRate, double consumption, double production, double acquisition, double storage, double totalConsumption, double totalProduction, double totalAcquisition, double totalReturn)
 {
     QSqlQuery query = QSqlQuery(m_db);
-    query.prepare("INSERT INTO powerBalance (timestamp, sampleRate, consumption, production, acquisition, storage) values (?, ?, ?, ?, ?, ?);");
+    query.prepare("INSERT INTO powerBalance (timestamp, sampleRate, consumption, production, acquisition, storage, totalConsumption, totalProduction, totalAcquisition, totalReturn) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
     query.addBindValue(timestamp.toMSecsSinceEpoch());
     query.addBindValue(sampleRate);
     query.addBindValue(consumption);
     query.addBindValue(production);
     query.addBindValue(acquisition);
     query.addBindValue(storage);
+    query.addBindValue(totalConsumption);
+    query.addBindValue(totalProduction);
+    query.addBindValue(totalAcquisition);
+    query.addBindValue(totalReturn);
     query.exec();
     if (query.lastError().isValid()) {
         qCWarning(dcEnergyExperience()) << "Error logging consumption sample:" << query.lastError();
         return false;
     }
-    emit powerBalanceEntryAdded(sampleRate, PowerBalanceLogEntry(timestamp, consumption, production, acquisition, storage));
+    emit powerBalanceEntryAdded(sampleRate, PowerBalanceLogEntry(timestamp, consumption, production, acquisition, storage, totalConsumption, totalProduction, totalAcquisition, totalReturn));
     return true;
 }
 
@@ -634,4 +691,18 @@ void EnergyLogger::trimThingPower(const ThingId &thingId, SampleRate sampleRate,
     if (query.numRowsAffected() > 0) {
         qCDebug(dcEnergyExperience()).nospace() << "Trimmed " << query.numRowsAffected() << " from thing power series for: " << thingId << sampleRate << " (Older than: " << beforeTime.toString() << ")";
     }
+}
+
+PowerBalanceLogEntry EnergyLogger::queryResultToBalanceLogEntry(const QSqlRecord &record) const
+{
+    return PowerBalanceLogEntry(QDateTime::fromMSecsSinceEpoch(record.value("timestamp").toLongLong()),
+                                record.value("consumption").toDouble(),
+                                record.value("production").toDouble(),
+                                record.value("acquisition").toDouble(),
+                                record.value("storage").toDouble(),
+                                record.value("totalConsumption").toDouble(),
+                                record.value("totalProduction").toDouble(),
+                                record.value("totalAcquisition").toDouble(),
+                                record.value("totalReturn").toDouble());
+
 }

@@ -61,6 +61,10 @@ public:
     virtual double currentPowerProduction() const = 0;
     virtual double currentPowerAcquisition() const = 0;
     virtual double currentPowerStorage() const = 0;
+    virtual double totalConsumption() const = 0;
+    virtual double totalProduction() const = 0;
+    virtual double totalAcquisition() const = 0;
+    virtual double totalReturn() const = 0;
 
     virtual EnergyLogs* logs() const = 0;
 

@@ -12,12 +12,16 @@ PowerBalanceLogEntry::PowerBalanceLogEntry()
 
 }
 
-PowerBalanceLogEntry::PowerBalanceLogEntry(const QDateTime &timestamp, double consumption, double production, double acquisition, double storage):
+PowerBalanceLogEntry::PowerBalanceLogEntry(const QDateTime &timestamp, double consumption, double production, double acquisition, double storage, double totalConsumption, double totalProduction, double totalAcquisition, double totalReturn):
     m_timestamp(timestamp),
     m_consumption(consumption),
     m_production(production),
     m_acquisition(acquisition),
-    m_storage(storage)
+    m_storage(storage),
+    m_totalConsumption(totalConsumption),
+    m_totalProduction(totalProduction),
+    m_totalAcquisition(totalAcquisition),
+    m_totalReturn(totalReturn)
 {
 
 }
@@ -45,6 +49,26 @@ double PowerBalanceLogEntry::acquisition() const
 double PowerBalanceLogEntry::storage() const
 {
     return m_storage;
+}
+
+double PowerBalanceLogEntry::totalConsumption() const
+{
+    return m_totalConsumption;
+}
+
+double PowerBalanceLogEntry::totalProduction() const
+{
+    return m_totalProduction;
+}
+
+double PowerBalanceLogEntry::totalAcquisition() const
+{
+    return m_totalAcquisition;
+}
+
+double PowerBalanceLogEntry::totalReturn() const
+{
+    return m_totalReturn;
 }
 
 QVariant PowerBalanceLogEntries::get(int index) const

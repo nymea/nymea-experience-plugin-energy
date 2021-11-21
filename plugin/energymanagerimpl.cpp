@@ -24,6 +24,13 @@ EnergyManagerImpl::EnergyManagerImpl(ThingManager *thingManager, QObject *parent
     EnergyManagerImpl::setRootMeter(rootMeterThingId);
     qCDebug(dcEnergyExperience()) << "Loaded root meter" << rootMeterThingId;
 
+    PowerBalanceLogEntry latestEntry = m_logger->latestLogEntry(EnergyLogs::SampleRateAny);
+    m_totalConsumption = latestEntry.totalConsumption();
+    m_totalProduction = latestEntry.totalProduction();
+    m_totalAcquisition = latestEntry.totalAcquisition();
+    m_totalReturn = latestEntry.totalReturn();
+    qCDebug(dcEnergyExperience()) << "Loader power balance totals. Consumption:" << m_totalConsumption << "Production:" << m_totalProduction << "Acquisition:" << m_totalAcquisition << "Return:" << m_totalReturn;
+
     foreach (Thing *thing, m_thingManager->configuredThings()) {
         watchThing(thing);
     }
@@ -75,6 +82,26 @@ double EnergyManagerImpl::currentPowerStorage() const
     return m_currentPowerStorage;
 }
 
+double EnergyManagerImpl::totalConsumption() const
+{
+    return m_totalConsumption;
+}
+
+double EnergyManagerImpl::totalProduction() const
+{
+    return m_totalProduction;
+}
+
+double EnergyManagerImpl::totalAcquisition() const
+{
+    return m_totalAcquisition;
+}
+
+double EnergyManagerImpl::totalReturn() const
+{
+    return m_totalReturn;
+}
+
 EnergyLogs *EnergyManagerImpl::logs() const
 {
     return m_logger;
@@ -106,6 +133,10 @@ void EnergyManagerImpl::watchThing(Thing *thing)
             || thing->thingClass().interfaces().contains("smartmeterconsumer")
             || thing->thingClass().interfaces().contains("smartmeterproducer")
             || thing->thingClass().interfaces().contains("energystorage")) {
+
+        m_totalEnergyConsumedCache[thing] = thing->stateValue("totalEnergyConsumed").toDouble();
+        m_totalEnergyProducedCache[thing] = thing->stateValue("totalEnergyProduced").toDouble();
+
         connect(thing, &Thing::stateValueChanged, this, [=](const StateTypeId &stateTypeId, const QVariant &value){
             if (thing->thingClass().getStateType(stateTypeId).name() == "currentPower") {                
                 m_logger->logThingPower(thing->id(), value.toDouble(), thing->state("totalEnergyConsumed").value().toDouble(), thing->state("totalEnergyProduced").value().toDouble());
@@ -127,22 +158,44 @@ void EnergyManagerImpl::updatePowerBalance()
     double currentPowerAcquisition = 0;
     if (m_rootMeter) {
         currentPowerAcquisition = m_rootMeter->stateValue("currentPower").toDouble();
+
+        double oldAcquisition = m_totalEnergyConsumedCache.value(m_rootMeter);
+        double newAcquisition = m_rootMeter->stateValue("totalEnergyConsumed").toDouble();
+        qCDebug(dcEnergyExperience()) << "Root meteter total consumption diff" << "old" << oldAcquisition << " new" << newAcquisition << (newAcquisition -oldAcquisition);
+        m_totalAcquisition += newAcquisition - oldAcquisition;
+        m_totalEnergyConsumedCache[m_rootMeter] = newAcquisition;
+
+        double oldReturn = m_totalEnergyProducedCache.value(m_rootMeter);
+        double newReturn = m_rootMeter->stateValue("totalEnergyProduced").toDouble();
+        qCDebug(dcEnergyExperience()) << "Root meteter total return diff" << "old" << oldReturn << " new" << newReturn << (newReturn - oldReturn);
+        m_totalReturn += newReturn - oldReturn;
+        m_totalEnergyProducedCache[m_rootMeter] = newReturn;
     }
 
     double currentPowerProduction = 0;
     foreach (Thing* thing, m_thingManager->configuredThings().filterByInterface("smartmeterproducer")) {
         currentPowerProduction += thing->stateValue("currentPower").toDouble();
+        double oldProduction = m_totalEnergyProducedCache.value(thing);
+        double newProduction = thing->stateValue("totalEnergyProduced").toDouble();
+        qCDebug(dcEnergyExperience()) << "inverter total production diff" << "old" << oldProduction << " new" << newProduction << (newProduction - oldProduction);
+        m_totalProduction += newProduction - oldProduction;
+        m_totalEnergyProducedCache[thing] = newProduction;
     }
 
     double currentPowerStorage = 0;
+    double totalFromStorage = 0;
     foreach (Thing *thing, m_thingManager->configuredThings().filterByInterface("energystorage")) {
         currentPowerStorage += thing->stateValue("currentPower").toDouble();
+        double oldProduction = m_totalEnergyProducedCache.value(thing);
+        double newProduction = thing->stateValue("totalEnergyProduced").toDouble();
+        totalFromStorage += newProduction - oldProduction;
+        m_totalEnergyProducedCache[thing] = newProduction;
     }
 
-    double currentPowerConsumption = -currentPowerProduction + currentPowerAcquisition - currentPowerStorage;
+    double currentPowerConsumption = currentPowerAcquisition + qAbs(qMin(0.0, currentPowerProduction)) - currentPowerStorage;
+    m_totalConsumption = m_totalAcquisition + m_totalProduction + totalFromStorage;
 
-
-    qCDebug(dcEnergyExperience()) << "Consumption:" << currentPowerConsumption << "Production:" << currentPowerProduction << "Acquisition:" << currentPowerAcquisition << "Storage:" << currentPowerStorage;
+    qCDebug(dcEnergyExperience()).noquote().nospace() << "Power balance: " << "🔥: " << currentPowerConsumption << " W, 🌞: " << currentPowerProduction << " W, 💵: " << currentPowerAcquisition << " W, 🔋: " << currentPowerStorage << " W. Totals: 🔥: " << m_totalConsumption << " kWh, 🌞: " << m_totalProduction << " kWh, 💵↓: " << m_totalAcquisition << " kWh, 💵↑: " << m_totalReturn << " kWh";
     if (currentPowerAcquisition != m_currentPowerAcquisition
             || currentPowerConsumption != m_currentPowerConsumption
             || currentPowerProduction != m_currentPowerProduction
@@ -152,7 +205,7 @@ void EnergyManagerImpl::updatePowerBalance()
         m_currentPowerConsumption = currentPowerConsumption;
         m_currentPowerStorage = currentPowerStorage;
         emit powerBalanceChanged();
-        m_logger->logPowerBalance(m_currentPowerConsumption, m_currentPowerProduction, m_currentPowerAcquisition, m_currentPowerStorage);
+        m_logger->logPowerBalance(m_currentPowerConsumption, m_currentPowerProduction, m_currentPowerAcquisition, m_currentPowerStorage, m_totalConsumption, m_totalProduction, m_totalAcquisition, m_totalReturn);
     }
 }
 
