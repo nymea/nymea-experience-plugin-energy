@@ -188,6 +188,6 @@ JsonReply *EnergyJsonHandler::GetThingPowerLogs(const QVariantMap &params)
     QDateTime from = params.contains("from") ? QDateTime::fromMSecsSinceEpoch(params.value("from").toLongLong() * 1000) : QDateTime();
     QDateTime to = params.contains("to") ? QDateTime::fromMSecsSinceEpoch(params.value("to").toLongLong() * 1000) : QDateTime();
     QVariantMap returns;
-    returns.insert("thingPowerLogEntries",pack(m_energyManager->logs()->thingPowerLogs(sampleRate, thingIds, from, to)));
+    returns.insert("thingPowerLogEntries", pack(m_energyManager->logs()->thingPowerLogs(sampleRate, thingIds, from, to)));
     return createReply(returns);
 }

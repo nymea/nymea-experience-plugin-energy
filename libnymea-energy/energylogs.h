@@ -102,7 +102,7 @@ Q_DECLARE_METATYPE(PowerBalanceLogEntries)
 
 class ThingPowerLogEntry {
     Q_GADGET
-    Q_PROPERTY(QDateTime timstamp READ timestamp)
+    Q_PROPERTY(QDateTime timestamp READ timestamp)
     Q_PROPERTY(QUuid thingId READ thingId)
     Q_PROPERTY(double currentPower READ currentPower)
     Q_PROPERTY(double totalConsumption READ totalConsumption)

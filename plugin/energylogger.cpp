@@ -139,13 +139,15 @@ ThingPowerLogEntries EnergyLogger::thingPowerLogs(SampleRate sampleRate, const Q
     QVariantList bindValues;
     bindValues << sampleRate;
 
+    qCDebug(dcEnergyExperience()) << "Fetching thing power logs for" << thingIds;
+
     QStringList thingsQuery;
     foreach (const ThingId &thingId, thingIds) {
         thingsQuery.append("thingId = ?");
         bindValues << thingId;
     }
     if (!thingsQuery.isEmpty()) {
-        queryString += "AND (" + thingsQuery.join(" OR ") + " )";
+        queryString += " AND (" + thingsQuery.join(" OR ") + " )";
     }
 
     if (!from.isNull()) {
@@ -598,7 +600,7 @@ bool EnergyLogger::insertPowerBalance(const QDateTime &timestamp, SampleRate sam
     query.addBindValue(totalReturn);
     query.exec();
     if (query.lastError().isValid()) {
-        qCWarning(dcEnergyExperience()) << "Error logging consumption sample:" << query.lastError();
+        qCWarning(dcEnergyExperience()) << "Error logging consumption sample:" << query.lastError() << query.executedQuery();
         return false;
     }
     emit powerBalanceEntryAdded(sampleRate, PowerBalanceLogEntry(timestamp, consumption, production, acquisition, storage, totalConsumption, totalProduction, totalAcquisition, totalReturn));
