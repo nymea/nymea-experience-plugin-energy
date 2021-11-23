@@ -658,17 +658,17 @@ bool EnergyLogger::sampleThingPower(const ThingId &thingId, SampleRate sampleRat
     }
 
     double medianCurrentPower = 0;
+    double totalConsumption = 0;
+    double totalProduction = 0;
     while (query.next()) {
         qCDebug(dcEnergyExperience()) << "Frame:" << query.value("currentPower").toDouble() << QDateTime::fromMSecsSinceEpoch(query.value("timestamp").toLongLong()).toString();
         medianCurrentPower += query.value("currentPower").toDouble();
+        totalConsumption = query.value("totalConsumption").toDouble();
+        totalProduction = query.value("totalProduction").toDouble();
     }
-    qCDebug(dcEnergyExperience()) << "Total:" << medianCurrentPower << "base samplerate" << baseSampleRate << "samplerate:" << sampleRate;
     medianCurrentPower = medianCurrentPower * baseSampleRate / sampleRate;
 
-    double totalConsumption = query.value("totalConsumption").toDouble();
-    double totalProduction = query.value("totalProduction").toDouble();
-
-    qCDebug(dcEnergyExperience()) << "Sampled:" << medianCurrentPower;
+    qCDebug(dcEnergyExperience()) << "Sampled:" << thingId << sampleRate << "media currentpower:" << medianCurrentPower << "total consumption:" << totalConsumption << "total production:" << totalProduction;
     return insertThingPower(sampleEnd, sampleRate, thingId, medianCurrentPower, totalConsumption, totalProduction);
 }
 
