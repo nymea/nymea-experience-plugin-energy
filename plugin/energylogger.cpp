@@ -42,15 +42,8 @@ EnergyLogger::EnergyLogger(QObject *parent) : EnergyLogs(parent)
     addConfig(SampleRate1Year, SampleRate1Month, 20); // 20 years
 
     // Load thingIds from logs so we have the complete list available for sampling, even if a thing might not produce any logs for a while.
-    QSqlQuery query(m_db);
-    query.prepare("SELECT DISTINCT thingId FROM thingPower;");
-    query.exec();
-    if (query.lastError().isValid()) {
-        qCWarning(dcEnergyExperience()) << "Failed to load existing things from logs:" << query.lastError();
-    } else {
-        while (query.next()) {
-            m_thingsPowerLiveLogs[query.value("thingId").toUuid()] = ThingPowerLogEntries();
-        }
+    foreach (const ThingId &thingId, loggedThings()) {
+        m_thingsPowerLiveLogs[thingId] = ThingPowerLogEntries();
     }
 
     // Start the scheduling
@@ -205,6 +198,34 @@ PowerBalanceLogEntry EnergyLogger::latestLogEntry(SampleRate sampleRate)
     }
     qCDebug(dcEnergyExperience()) << "Loaded latest log entry:" << query.record();
     return queryResultToBalanceLogEntry(query.record());
+}
+
+void EnergyLogger::removeThingLogs(const ThingId &thingId)
+{
+    QSqlQuery query(m_db);
+    query.prepare("DELETE FROM thingPower WHERE thingId = ?;");
+    query.addBindValue(thingId);
+    query.exec();
+    if (query.lastError().isValid()) {
+        qCWarning(dcEnergyExperience()) << "Error removing thing energy logs for thing id" << thingId << query.lastError() << query.executedQuery();
+    }
+}
+
+QList<ThingId> EnergyLogger::loggedThings() const
+{
+    QList<ThingId> ret;
+
+    QSqlQuery query(m_db);
+    query.prepare("SELECT DISTINCT thingId FROM thingPower;");
+    query.exec();
+    if (query.lastError().isValid()) {
+        qCWarning(dcEnergyExperience()) << "Failed to load existing things from logs:" << query.lastError();
+    } else {
+        while (query.next()) {
+            ret.append(query.value("thingId").toUuid());
+        }
+    }
+    return ret;
 }
 
 void EnergyLogger::sample()

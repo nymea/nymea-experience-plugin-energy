@@ -26,6 +26,9 @@ public:
 
     PowerBalanceLogEntry latestLogEntry(SampleRate sampleRate);
 
+    void removeThingLogs(const ThingId &thingId);
+    QList<ThingId> loggedThings() const;
+
 private slots:
     void sample();
 

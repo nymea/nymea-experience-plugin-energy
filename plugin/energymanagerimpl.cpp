@@ -36,6 +36,14 @@ EnergyManagerImpl::EnergyManagerImpl(ThingManager *thingManager, QObject *parent
     }
     connect(thingManager, &ThingManager::thingAdded, this, &EnergyManagerImpl::watchThing);
     connect(thingManager, &ThingManager::thingRemoved, this, &EnergyManagerImpl::unwatchThing);
+
+    // Housekeeping on the logger
+    foreach (const ThingId &thingId, m_logger->loggedThings()) {
+        if (!m_thingManager->findConfiguredThing(thingId)) {
+            qCDebug(dcEnergyExperience()) << "Clearing thing logs for unknown thing id" << thingId << "from energy logs.";
+            m_logger->removeThingLogs(thingId);
+        }
+    }
 }
 
 Thing *EnergyManagerImpl::rootMeter() const
@@ -151,6 +159,8 @@ void EnergyManagerImpl::unwatchThing(const ThingId &thingId)
         m_rootMeter = nullptr;
         emit rootMeterChanged();
     }
+
+    m_logger->removeThingLogs(thingId);
 }
 
 void EnergyManagerImpl::updatePowerBalance()
