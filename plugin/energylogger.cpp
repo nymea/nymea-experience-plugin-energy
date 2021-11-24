@@ -313,7 +313,7 @@ void EnergyLogger::sample()
     // and then trim them
     if (now > m_nextSamples.value(SampleRate1Min)) {
         QDateTime sampleTime = m_nextSamples.value(SampleRate1Min);
-        QDateTime oldestTimestamp = sampleTime.addMSecs(-m_maxMinuteSamples * 60 * 1000);
+        QDateTime oldestTimestamp = sampleTime.addMSecs(-(qulonglong)m_maxMinuteSamples * 60 * 1000);
         trimPowerBalance(SampleRate1Min, oldestTimestamp);
         foreach (const ThingId &thingId, m_thingsPowerLiveLogs.keys()) {
             trimThingPower(thingId, SampleRate1Min, oldestTimestamp);
@@ -322,7 +322,7 @@ void EnergyLogger::sample()
     foreach (SampleRate sampleRate, m_configs.keys()) {
         if (now >= m_nextSamples.value(sampleRate)) {
             QDateTime sampleTime = m_nextSamples.value(sampleRate);
-            QDateTime oldestTimestamp = sampleTime.addMSecs(-m_configs.value(sampleRate).maxSamples * sampleRate * 60 * 1000);
+            QDateTime oldestTimestamp = sampleTime.addMSecs(-(qulonglong)m_configs.value(sampleRate).maxSamples * sampleRate * 60 * 1000);
             trimPowerBalance(sampleRate, oldestTimestamp);
             foreach (const ThingId &thingId, m_thingsPowerLiveLogs.keys()) {
                 trimThingPower(thingId, sampleRate, oldestTimestamp);

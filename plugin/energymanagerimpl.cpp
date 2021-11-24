@@ -29,7 +29,7 @@ EnergyManagerImpl::EnergyManagerImpl(ThingManager *thingManager, QObject *parent
     m_totalProduction = latestEntry.totalProduction();
     m_totalAcquisition = latestEntry.totalAcquisition();
     m_totalReturn = latestEntry.totalReturn();
-    qCDebug(dcEnergyExperience()) << "Loader power balance totals. Consumption:" << m_totalConsumption << "Production:" << m_totalProduction << "Acquisition:" << m_totalAcquisition << "Return:" << m_totalReturn;
+    qCDebug(dcEnergyExperience()) << "Loaded power balance totals. Consumption:" << m_totalConsumption << "Production:" << m_totalProduction << "Acquisition:" << m_totalAcquisition << "Return:" << m_totalReturn;
 
     foreach (Thing *thing, m_thingManager->configuredThings()) {
         watchThing(thing);
@@ -171,7 +171,7 @@ void EnergyManagerImpl::updatePowerBalance()
 
         double oldAcquisition = m_totalEnergyConsumedCache.value(m_rootMeter);
         double newAcquisition = m_rootMeter->stateValue("totalEnergyConsumed").toDouble();
-        qCDebug(dcEnergyExperience()) << "Root meteter total consumption diff" << "old" << oldAcquisition << " new" << newAcquisition << (newAcquisition -oldAcquisition);
+        qCDebug(dcEnergyExperience()) << "Root meteter total consumption: Previous value:" << oldAcquisition << "New value:" << newAcquisition << "Diff:" << (newAcquisition -oldAcquisition);
         m_totalAcquisition += newAcquisition - oldAcquisition;
         m_totalEnergyConsumedCache[m_rootMeter] = newAcquisition;
 
