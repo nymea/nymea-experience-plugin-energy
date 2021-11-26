@@ -25,6 +25,7 @@ public:
     ThingPowerLogEntries thingPowerLogs(SampleRate sampleRate, const QList<ThingId> &thingIds, const QDateTime &from = QDateTime(), const QDateTime &to = QDateTime()) const override;
 
     PowerBalanceLogEntry latestLogEntry(SampleRate sampleRate);
+    ThingPowerLogEntry latestLogEntry(SampleRate sampleRate, const ThingId &thingId);
 
     void removeThingLogs(const ThingId &thingId);
     QList<ThingId> loggedThings() const;
@@ -54,6 +55,7 @@ private:
     void trimThingPower(const ThingId &thingId, SampleRate sampleRate, const QDateTime &beforeTime);
 
     PowerBalanceLogEntry queryResultToBalanceLogEntry(const QSqlRecord &record) const;
+    ThingPowerLogEntry queryResultToThingPowerLogEntry(const QSqlRecord &record) const;
 
 private:
     struct SampleConfig {

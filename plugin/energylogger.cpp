@@ -87,6 +87,7 @@ void EnergyLogger::logThingPower(const ThingId &thingId, double currentPower, do
         m_thingsPowerLiveLogs[thingId].removeLast();
     }
 }
+
 PowerBalanceLogEntries EnergyLogger::powerBalanceLogs(SampleRate sampleRate, const QDateTime &from, const QDateTime &to) const
 {
     PowerBalanceLogEntries result;
@@ -196,8 +197,25 @@ PowerBalanceLogEntry EnergyLogger::latestLogEntry(SampleRate sampleRate)
         qCDebug(dcEnergyExperience()) << "No power balance log entry in DB for sample rate:" << sampleRate;
         return PowerBalanceLogEntry();
     }
-    qCDebug(dcEnergyExperience()) << "Loaded latest log entry:" << query.record();
     return queryResultToBalanceLogEntry(query.record());
+}
+
+ThingPowerLogEntry EnergyLogger::latestLogEntry(SampleRate sampleRate, const ThingId &thingId)
+{
+    QSqlQuery query(m_db);
+    query.prepare("SELECT MAX(timestamp), currentPower, totalConsumption, totalProduction from thingPower WHERE sampleRate = ? AND thingId = ?;");
+    query.addBindValue(sampleRate);
+    query.addBindValue(thingId);
+    if (!query.exec()) {
+        qCWarning(dcEnergyExperience()) << "Error fetching latest thing log entry from DB:" << query.lastError() << query.executedQuery();
+        return ThingPowerLogEntry();
+    }
+    if (!query.next()) {
+        qCDebug(dcEnergyExperience()) << "No thing power log entry in DB for sample rate:" << sampleRate;
+        return ThingPowerLogEntry();
+    }
+    return queryResultToThingPowerLogEntry(query.record());
+
 }
 
 void EnergyLogger::removeThingLogs(const ThingId &thingId)
@@ -728,4 +746,13 @@ PowerBalanceLogEntry EnergyLogger::queryResultToBalanceLogEntry(const QSqlRecord
                                 record.value("totalAcquisition").toDouble(),
                                 record.value("totalReturn").toDouble());
 
+}
+
+ThingPowerLogEntry EnergyLogger::queryResultToThingPowerLogEntry(const QSqlRecord &record) const
+{
+    return ThingPowerLogEntry(QDateTime::fromMSecsSinceEpoch(record.value("timestamp").toULongLong()),
+                              record.value("thingId").toUuid(),
+                              record.value("currentPower").toDouble(),
+                              record.value("totalConsumption").toDouble(),
+                              record.value("totalProduction").toDouble());
 }

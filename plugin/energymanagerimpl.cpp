@@ -142,8 +142,10 @@ void EnergyManagerImpl::watchThing(Thing *thing)
             || thing->thingClass().interfaces().contains("smartmeterproducer")
             || thing->thingClass().interfaces().contains("energystorage")) {
 
-        m_totalEnergyConsumedCache[thing] = thing->stateValue("totalEnergyConsumed").toDouble();
-        m_totalEnergyProducedCache[thing] = thing->stateValue("totalEnergyProduced").toDouble();
+        ThingPowerLogEntry entry = m_logger->latestLogEntry(EnergyLogs::SampleRate1Min, {thing->id()});
+        m_totalEnergyConsumedCache[thing] = entry.totalConsumption();
+        m_totalEnergyProducedCache[thing] = entry.totalProduction();
+        qCDebug(dcEnergyExperience()) << "Loaded thing power totals for" << thing->name() << "Consumption:" << entry.totalConsumption() << "Production:" << entry.totalProduction();
 
         connect(thing, &Thing::stateValueChanged, this, [=](const StateTypeId &stateTypeId, const QVariant &value){
             if (thing->thingClass().getStateType(stateTypeId).name() == "currentPower") {                
@@ -171,13 +173,13 @@ void EnergyManagerImpl::updatePowerBalance()
 
         double oldAcquisition = m_totalEnergyConsumedCache.value(m_rootMeter);
         double newAcquisition = m_rootMeter->stateValue("totalEnergyConsumed").toDouble();
-        qCDebug(dcEnergyExperience()) << "Root meteter total consumption: Previous value:" << oldAcquisition << "New value:" << newAcquisition << "Diff:" << (newAcquisition -oldAcquisition);
+        qCDebug(dcEnergyExperience()) << "Root meter total consumption: Previous value:" << oldAcquisition << "New value:" << newAcquisition << "Diff:" << (newAcquisition -oldAcquisition);
         m_totalAcquisition += newAcquisition - oldAcquisition;
         m_totalEnergyConsumedCache[m_rootMeter] = newAcquisition;
 
         double oldReturn = m_totalEnergyProducedCache.value(m_rootMeter);
         double newReturn = m_rootMeter->stateValue("totalEnergyProduced").toDouble();
-        qCDebug(dcEnergyExperience()) << "Root meteter total return diff" << "old" << oldReturn << " new" << newReturn << (newReturn - oldReturn);
+        qCDebug(dcEnergyExperience()) << "Root meter total production: Previous value:" << oldReturn << "New value:" << newReturn << "Diff:" << (newReturn - oldReturn);
         m_totalReturn += newReturn - oldReturn;
         m_totalEnergyProducedCache[m_rootMeter] = newReturn;
     }
@@ -187,7 +189,7 @@ void EnergyManagerImpl::updatePowerBalance()
         currentPowerProduction += thing->stateValue("currentPower").toDouble();
         double oldProduction = m_totalEnergyProducedCache.value(thing);
         double newProduction = thing->stateValue("totalEnergyProduced").toDouble();
-        qCDebug(dcEnergyExperience()) << "inverter total production diff" << "old" << oldProduction << " new" << newProduction << (newProduction - oldProduction);
+        qCDebug(dcEnergyExperience()) << "Producer" << thing->name() << "total production: Previous value:" << oldProduction << "New value:" << newProduction << "Diff:" << (newProduction - oldProduction);
         m_totalProduction += newProduction - oldProduction;
         m_totalEnergyProducedCache[thing] = newProduction;
     }
@@ -198,6 +200,7 @@ void EnergyManagerImpl::updatePowerBalance()
         currentPowerStorage += thing->stateValue("currentPower").toDouble();
         double oldProduction = m_totalEnergyProducedCache.value(thing);
         double newProduction = thing->stateValue("totalEnergyProduced").toDouble();
+        qCDebug(dcEnergyExperience()) << "Storage" << thing->name() << "total storage: Previous value:" << oldProduction << "New value:" << newProduction << "Diff:" << (newProduction - oldProduction);
         totalFromStorage += newProduction - oldProduction;
         m_totalEnergyProducedCache[thing] = newProduction;
     }
