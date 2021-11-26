@@ -109,7 +109,7 @@ PowerBalanceLogEntries EnergyLogger::powerBalanceLogs(SampleRate sampleRate, con
         query.addBindValue(bindValue);
     }
 
-    qCDebug(dcEnergyExperience()) << "Executing" << queryString << query.executedQuery() << bindValues;
+    qCDebug(dcEnergyExperience()) << "Executing" << queryString << bindValues;
     query.exec();
     if (query.lastError().isValid()) {
         qCWarning(dcEnergyExperience()) << "Error fetching power balance logs:" << query.lastError() << query.executedQuery();
@@ -236,7 +236,7 @@ void EnergyLogger::sample()
         QDateTime sampleEnd = m_nextSamples.value(SampleRate1Min);
         QDateTime sampleStart = sampleEnd.addMSecs(-60 * 1000);
 
-        qCDebug(dcEnergyExperience()) << "Sampling 1 min" << sampleEnd.toString();
+        qCDebug(dcEnergyExperience()) << "Sampling power balance for 1 min" << sampleEnd.toString();
 
         double medianConsumption = 0;
         double medianProduction = 0;
@@ -267,7 +267,7 @@ void EnergyLogger::sample()
         double totalAcquisition = newest.totalAcquisition();
         double totalReturn = newest.totalReturn();
 
-        qCDebug(dcEnergyExperience()) << "Power balance for sample:" << medianConsumption << medianProduction << medianAcquisition << medianStorage << "duration:" << sampleStart.msecsTo(sampleEnd);
+        qCDebug(dcEnergyExperience()) << "Sampled:" << "🔥:" << medianConsumption << "🌞:" << medianProduction << "💵:" << medianAcquisition << "🔋:" << medianStorage << "Totals:" << "🔥:" << totalConsumption << "🌞:" << totalProduction << "💵↓:" << totalAcquisition << "💵↑:" << totalReturn;
         insertPowerBalance(sampleEnd, SampleRate1Min, medianConsumption, medianProduction, medianAcquisition, medianStorage, totalConsumption, totalProduction, totalAcquisition, totalReturn);
         m_lastSampleTotalConsumption = totalConsumption;
         m_lastSampleTotalProducation = totalProduction;
@@ -276,6 +276,7 @@ void EnergyLogger::sample()
 
         foreach (const ThingId &thingId, m_thingsPowerLiveLogs.keys()) {
             medianConsumption = 0;
+            qCDebug(dcEnergyExperience()) << "Sampling thing energy for 1 min:" << thingId;
             ThingPowerLogEntries entries = m_thingsPowerLiveLogs.value(thingId);
             for (int i = 0; i < entries.count(); i++) {
                 const ThingPowerLogEntry &entry = entries.at(i);
@@ -295,7 +296,7 @@ void EnergyLogger::sample()
                 totalConsumption = entries.last().totalConsumption();
                 totalProduction = entries.last().totalProduction();
             }
-            qCDebug(dcEnergyExperience()) << "Thing power of sample:" << medianConsumption << totalConsumption << totalProduction << "total duration:" << sampleStart.msecsTo(sampleEnd);
+            qCDebug(dcEnergyExperience()) << "Sampled:" << "🔥:" << medianConsumption << "🌞:" << medianProduction << "Totals:" << "🔥:" << totalConsumption << "🌞:" << totalProduction;
             insertThingPower(sampleEnd, SampleRate1Min, thingId, medianConsumption, totalConsumption, totalProduction);
         }
     }
@@ -313,7 +314,7 @@ void EnergyLogger::sample()
     // and then trim them
     if (now > m_nextSamples.value(SampleRate1Min)) {
         QDateTime sampleTime = m_nextSamples.value(SampleRate1Min);
-        QDateTime oldestTimestamp = sampleTime.addMSecs(-(qulonglong)m_maxMinuteSamples * 60 * 1000);
+        QDateTime oldestTimestamp = sampleTime.addMSecs(-(qint64)m_maxMinuteSamples * 60 * 1000);
         trimPowerBalance(SampleRate1Min, oldestTimestamp);
         foreach (const ThingId &thingId, m_thingsPowerLiveLogs.keys()) {
             trimThingPower(thingId, SampleRate1Min, oldestTimestamp);
@@ -322,7 +323,7 @@ void EnergyLogger::sample()
     foreach (SampleRate sampleRate, m_configs.keys()) {
         if (now >= m_nextSamples.value(sampleRate)) {
             QDateTime sampleTime = m_nextSamples.value(sampleRate);
-            QDateTime oldestTimestamp = sampleTime.addMSecs(-(qulonglong)m_configs.value(sampleRate).maxSamples * sampleRate * 60 * 1000);
+            QDateTime oldestTimestamp = sampleTime.addMSecs(-(qint64)m_configs.value(sampleRate).maxSamples * sampleRate * 60 * 1000);
             trimPowerBalance(sampleRate, oldestTimestamp);
             foreach (const ThingId &thingId, m_thingsPowerLiveLogs.keys()) {
                 trimThingPower(thingId, sampleRate, oldestTimestamp);
@@ -585,7 +586,7 @@ bool EnergyLogger::samplePowerBalance(SampleRate sampleRate, SampleRate baseSamp
     double totalAcquisition = 0;
     double totalReturn = 0;
     while (query.next()) {
-        qCDebug(dcEnergyExperience()) << "Frame:" << query.value("consumption").toDouble() << query.value("production").toDouble() << query.value("acquisition").toDouble() << QDateTime::fromMSecsSinceEpoch(query.value("timestamp").toLongLong()).toString();
+        qCDebug(dcEnergyExperience()) << "Frame:" << QDateTime::fromMSecsSinceEpoch(query.value("timestamp").toLongLong()).toString() << query.value("consumption").toDouble() << query.value("production").toDouble() << query.value("acquisition").toDouble() << query.value("storage").toDouble() << query.value("totalConsumption").toDouble() << query.value("totalProduction").toDouble() << query.value("totalAcquisition").toDouble() << query.value("totalReturn").toDouble();
         medianConsumption += query.value("consumption").toDouble();
         medianProduction += query.value("production").toDouble();
         medianAcquisition += query.value("acquisition").toDouble();
@@ -595,13 +596,12 @@ bool EnergyLogger::samplePowerBalance(SampleRate sampleRate, SampleRate baseSamp
         totalAcquisition = query.value("totalAcquisition").toDouble();
         totalReturn = query.value("totalReturn").toDouble();
     }
-    qCDebug(dcEnergyExperience()) << "Totals:" << medianConsumption << medianProduction << medianAcquisition << medianStorage << "base samplerate" << baseSampleRate << "samplerate:" << sampleRate;
     medianConsumption = medianConsumption * baseSampleRate / sampleRate;
     medianProduction = medianProduction * baseSampleRate / sampleRate;
     medianAcquisition = medianAcquisition * baseSampleRate / sampleRate;
     medianStorage = medianStorage * baseSampleRate / sampleRate;
 
-    qCDebug(dcEnergyExperience()) << "Sampled:" << medianConsumption << medianProduction << medianAcquisition << medianStorage;
+    qCDebug(dcEnergyExperience()) << "Sampled:" << "🔥:" << medianConsumption << "🌞:" << medianProduction << "💵:" << medianAcquisition << "🔋:" << medianStorage << "Totals:" << "🔥:" << totalConsumption << "🌞:" << totalProduction << "💵↓:" << totalAcquisition << "💵↑:" << totalReturn;
     return insertPowerBalance(sampleEnd, sampleRate, medianConsumption, medianProduction, medianAcquisition, medianStorage, totalConsumption, totalProduction, totalAcquisition, totalReturn);
 }
 
