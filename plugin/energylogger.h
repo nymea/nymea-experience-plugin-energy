@@ -69,11 +69,6 @@ private:
     QTimer m_sampleTimer;
     QHash<SampleRate, QDateTime> m_nextSamples;
 
-    double m_lastSampleTotalConsumption = 0;
-    double m_lastSampleTotalProducation = 0;
-    double m_lastSampleTotalAcquisition = 0;
-    double m_lastSampleTotalReturn = 0;
-
     QSqlDatabase m_db;
 
     int m_maxMinuteSamples = 0;

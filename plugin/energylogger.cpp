@@ -287,10 +287,6 @@ void EnergyLogger::sample()
 
         qCDebug(dcEnergyExperience()) << "Sampled:" << "🔥:" << medianConsumption << "🌞:" << medianProduction << "💵:" << medianAcquisition << "🔋:" << medianStorage << "Totals:" << "🔥:" << totalConsumption << "🌞:" << totalProduction << "💵↓:" << totalAcquisition << "💵↑:" << totalReturn;
         insertPowerBalance(sampleEnd, SampleRate1Min, medianConsumption, medianProduction, medianAcquisition, medianStorage, totalConsumption, totalProduction, totalAcquisition, totalReturn);
-        m_lastSampleTotalConsumption = totalConsumption;
-        m_lastSampleTotalProducation = totalProduction;
-        m_lastSampleTotalAcquisition = totalAcquisition;
-        m_lastSampleTotalReturn = totalReturn;
 
         foreach (const ThingId &thingId, m_thingsPowerLiveLogs.keys()) {
             medianConsumption = 0;
@@ -308,12 +304,11 @@ void EnergyLogger::sample()
                 }
             }
             medianConsumption /= sampleStart.msecsTo(sampleEnd);
-            double totalConsumption = 0;
-            double totalProduction = 0;
-            if (entries.count() > 0) {
-                totalConsumption = entries.last().totalConsumption();
-                totalProduction = entries.last().totalProduction();
-            }
+
+            ThingPowerLogEntry newest = entries.count() > 0 ? entries.first() : ThingPowerLogEntry();
+            double totalConsumption = newest.totalConsumption();
+            double totalProduction = newest.totalProduction();
+
             qCDebug(dcEnergyExperience()) << "Sampled:" << "🔥:" << medianConsumption << "🌞:" << medianProduction << "Totals:" << "🔥:" << totalConsumption << "🌞:" << totalProduction;
             insertThingPower(sampleEnd, SampleRate1Min, thingId, medianConsumption, totalConsumption, totalProduction);
         }
