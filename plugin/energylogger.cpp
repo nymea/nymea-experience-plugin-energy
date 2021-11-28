@@ -41,9 +41,9 @@ EnergyLogger::EnergyLogger(QObject *parent) : EnergyLogs(parent)
     addConfig(SampleRate1Month, SampleRate1Day, 240); // 20 years
     addConfig(SampleRate1Year, SampleRate1Month, 20); // 20 years
 
-    // Load thingIds from logs so we have the complete list available for sampling, even if a thing might not produce any logs for a while.
+    // Load last values from thingsPort logs so we have at least one base sample available for sampling, even if a thing might not produce any logs for a while.
     foreach (const ThingId &thingId, loggedThings()) {
-        m_thingsPowerLiveLogs[thingId] = ThingPowerLogEntries();
+        m_thingsPowerLiveLogs[thingId].append(latestLogEntry(SampleRate1Min, thingId));
     }
 
     // Start the scheduling
@@ -265,14 +265,15 @@ void EnergyLogger::sample()
             QDateTime frameStart = (entry.timestamp() < sampleStart) ? sampleStart : entry.timestamp();
             QDateTime frameEnd = i == 0 ? sampleEnd : m_balanceLiveLog.at(i-1).timestamp();
             int frameDuration = frameStart.msecsTo(frameEnd);
+            qCDebug(dcEnergyExperience()) << "Frame" << i << "duration:" << frameDuration << "value:" << entry.consumption() << "start" << frameStart.toString() << "end" << frameEnd.toString();
+
+            if (entry.timestamp() <= sampleStart) {
+                break;
+            }
             medianConsumption += entry.consumption() * frameDuration;
             medianProduction += entry.production() * frameDuration;
             medianAcquisition += entry.acquisition() * frameDuration;
             medianStorage += entry.storage() * frameDuration;
-//            qCDebug(dcEnergyExperience()) << "Frame" << i << "duration:" << frameDuration << "value:" << entry.consumption << "start" << frameStart.toString() << "end" << frameEnd.toString();
-            if (entry.timestamp() < sampleStart) {
-                break;
-            }
         }
         medianConsumption /= sampleStart.msecsTo(sampleEnd);
         medianProduction /= sampleStart.msecsTo(sampleEnd);
@@ -297,11 +298,11 @@ void EnergyLogger::sample()
                 QDateTime frameStart = (entry.timestamp() < sampleStart) ? sampleStart : entry.timestamp();
                 QDateTime frameEnd = i == 0 ? sampleEnd : entries.at(i-1).timestamp();
                 int frameDuration = frameStart.msecsTo(frameEnd);
-                medianPower += entry.currentPower() * frameDuration;
-//                qCDebug(dcEnergyExperience()) << "Frame" << i << "duration:" << frameDuration << "value:" << entry.value;
-                if (entry.timestamp() < sampleStart) {
+                qCDebug(dcEnergyExperience()) << "Frame" << i << "duration:" << frameDuration << "value:" << entry.currentPower();
+                if (entry.timestamp() <= sampleStart) {
                     break;
                 }
+                medianPower += entry.currentPower() * frameDuration;
             }
             medianPower /= sampleStart.msecsTo(sampleEnd);
 
@@ -589,7 +590,7 @@ bool EnergyLogger::samplePowerBalance(SampleRate sampleRate, SampleRate baseSamp
     double totalReturn = 0;
 
     QSqlQuery query(m_db);
-    query.prepare("SELECT * FROM powerBalance WHERE sampleRate = ? AND timestamp >= ? AND timestamp < ?;");
+    query.prepare("SELECT * FROM powerBalance WHERE sampleRate = ? AND timestamp > ? AND timestamp <= ?;");
     query.addBindValue(baseSampleRate);
     query.addBindValue(sampleStart.toMSecsSinceEpoch());
     query.addBindValue(sampleEnd.toMSecsSinceEpoch());
@@ -690,7 +691,7 @@ bool EnergyLogger::sampleThingPower(const ThingId &thingId, SampleRate sampleRat
     double totalProduction = 0;
 
     QSqlQuery query(m_db);
-    query.prepare("SELECT * FROM thingPower WHERE thingId = ? AND sampleRate = ? AND timestamp >= ? AND timestamp < ?;");
+    query.prepare("SELECT * FROM thingPower WHERE thingId = ? AND sampleRate = ? AND timestamp > ? AND timestamp <= ?;");
     query.addBindValue(thingId);
     query.addBindValue(baseSampleRate);
     query.addBindValue(sampleStart.toMSecsSinceEpoch());
