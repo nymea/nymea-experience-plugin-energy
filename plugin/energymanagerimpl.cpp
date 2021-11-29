@@ -147,9 +147,9 @@ void EnergyManagerImpl::watchThing(Thing *thing)
         m_totalEnergyProducedCache[thing] = entry.totalProduction();
         qCDebug(dcEnergyExperience()) << "Loaded thing power totals for" << thing->name() << "Consumption:" << entry.totalConsumption() << "Production:" << entry.totalProduction();
 
-        connect(thing, &Thing::stateValueChanged, this, [=](const StateTypeId &stateTypeId, const QVariant &value){
-            if (thing->thingClass().getStateType(stateTypeId).name() == "currentPower") {                
-                m_logger->logThingPower(thing->id(), value.toDouble(), thing->state("totalEnergyConsumed").value().toDouble(), thing->state("totalEnergyProduced").value().toDouble());
+        connect(thing, &Thing::stateValueChanged, this, [=](const StateTypeId &stateTypeId, const QVariant &/*value*/){
+            if (QStringList({"currentPower", "totalEnergyConsumed", "totalEnergyProduced"}).contains(thing->thingClass().getStateType(stateTypeId).name())) {
+                m_logger->logThingPower(thing->id(), thing->state("currentPower").value().toDouble(), thing->state("totalEnergyConsumed").value().toDouble(), thing->state("totalEnergyProduced").value().toDouble());
             }
         });
     }

@@ -267,13 +267,13 @@ void EnergyLogger::sample()
             int frameDuration = frameStart.msecsTo(frameEnd);
             qCDebug(dcEnergyExperience()) << "Frame" << i << "duration:" << frameDuration << "value:" << entry.consumption() << "start" << frameStart.toString() << "end" << frameEnd.toString();
 
-            if (entry.timestamp() <= sampleStart) {
-                break;
-            }
             medianConsumption += entry.consumption() * frameDuration;
             medianProduction += entry.production() * frameDuration;
             medianAcquisition += entry.acquisition() * frameDuration;
             medianStorage += entry.storage() * frameDuration;
+            if (entry.timestamp() < sampleStart) {
+                break;
+            }
         }
         medianConsumption /= sampleStart.msecsTo(sampleEnd);
         medianProduction /= sampleStart.msecsTo(sampleEnd);
@@ -299,10 +299,10 @@ void EnergyLogger::sample()
                 QDateTime frameEnd = i == 0 ? sampleEnd : entries.at(i-1).timestamp();
                 int frameDuration = frameStart.msecsTo(frameEnd);
                 qCDebug(dcEnergyExperience()) << "Frame" << i << "duration:" << frameDuration << "value:" << entry.currentPower();
-                if (entry.timestamp() <= sampleStart) {
+                medianPower += entry.currentPower() * frameDuration;
+                if (entry.timestamp() < sampleStart) {
                     break;
                 }
-                medianPower += entry.currentPower() * frameDuration;
             }
             medianPower /= sampleStart.msecsTo(sampleEnd);
 
