@@ -25,11 +25,12 @@ EnergyLogger::EnergyLogger(QObject *parent) : EnergyLogs(parent)
     // of all series building on it.
 
     // Disk space considerations;
-    // Each entry takes approx 30 bytes for powerBalance + 50 bytes for thingCurrentPower per thing of disk space
+    // Each entry takes approx 50 bytes for powerBalance + 60 bytes for thingCurrentPower per thing of disk space
     // SQLite adds metadata and overhead of about 5%
     // The resulting database size can be estimated with (count being the sum of all numbers below):
-    // (count * 30 bytes) + (count * things * 50 bytes) + 5%
-    // 10000 entries, with 5 energy things => ~3MB
+    // (count * 50 bytes) + (count * things * 60 bytes) + 5%
+    // 10000 entries, with 5 energy things => ~4MB
+    // Note: use sqlite3_analyzer to see the approx. size per entry in each table.
 
     m_maxMinuteSamples = 15;
 
