@@ -38,7 +38,7 @@ public:
     virtual PowerBalanceLogEntries powerBalanceLogs(SampleRate sampleRate, const QDateTime &from = QDateTime(), const QDateTime &to = QDateTime()) const = 0;
 
     /*! Returns logs for the given sample rate for currentPower, totalEnergyConsumed and totalEnergyProduced for the given things.
-     *  From and to may be given to limie results to a time span.
+     *  From and to may be given to limit results to a time span.
      *  If thingIds is empty, all things will be returned.
      */
     virtual ThingPowerLogEntries thingPowerLogs(SampleRate sampleRate, const QList<ThingId> &thingIds, const QDateTime &from = QDateTime(), const QDateTime &to = QDateTime()) const = 0;

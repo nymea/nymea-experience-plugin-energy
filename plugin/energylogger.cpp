@@ -488,7 +488,7 @@ void EnergyLogger::rectifySamples(SampleRate sampleRate, SampleRate baseSampleRa
     // Normally we'd need to find the newest available sample of a series and catch up from there.
     // However, it could happen a series does not have any samples at all yet. For example if we're logging since january,
     // and at new years the system was off, we missed the new years yearly sample and don't have any earlier. For those cases
-    // we need to start resampling from the oldest timestamp we find in the DB at all (regardless of the sampleRate)
+    // we need to start resampling from the oldest timestamp we find in the DB for the base sampleRate.
     QDateTime oldestBaseSample = getOldestPowerBalanceSampleTimestamp(baseSampleRate);
     QDateTime newestSample = getNewestPowerBalanceSampleTimestamp(sampleRate);
 
@@ -577,8 +577,6 @@ bool EnergyLogger::samplePowerBalance(SampleRate sampleRate, SampleRate baseSamp
 {
     QDateTime sampleStart = sampleEnd.addMSecs(-sampleRate * 60 * 1000);
 
-    // FIXME: If base samplerate does not contain a single entry in the given timeframe (e.g. system has been off for more than 15 mins) we seem to mess up totalConsumption
-    // Needs verifying that lower sample rates are always rectified first!
     qCDebug(dcEnergyExperience()) << "Sampling power balance" << sampleRate << "from" << sampleStart << "to" << sampleEnd;
 
     double medianConsumption = 0;

@@ -12,10 +12,11 @@ EnergyManagerImpl::EnergyManagerImpl(ThingManager *thingManager, QObject *parent
     m_thingManager(thingManager),
     m_logger(new EnergyLogger(this))
 {
-    // Most of the time we get a bunch of signals at the same time (root meter, producers, consumers etc)
-    // In order to decrease some load on the system, we'll wait for wee bit until we actually update to
-    // accumulate those changes and calculate the change in one go.
-    m_balanceUpdateTimer.setInterval(50);
+    // Most of the time we get a bunch of state changes (currentPower, totals, for inverter, battery, rootmeter)
+    // at the same time if they're implemented by the same plugin.
+    // In order to decrease some load on the system, we'll wait for the event loop pass to finish until we actually
+    // update to accumulate those changes and calculate the change in one go.
+    m_balanceUpdateTimer.setInterval(0);
     m_balanceUpdateTimer.setSingleShot(true);
     connect(&m_balanceUpdateTimer, &QTimer::timeout, this, &EnergyManagerImpl::updatePowerBalance);
 
@@ -125,7 +126,7 @@ void EnergyManagerImpl::watchThing(Thing *thing)
 
     qCDebug(dcEnergyExperience()) << "Wathing thing:" << thing->name();
 
-    // React on things that requie us updating the power balance
+    // React on things that require us updating the power balance
     if (thing->thingClass().interfaces().contains("energymeter")
             || thing->thingClass().interfaces().contains("smartmeterproducer")
             || thing->thingClass().interfaces().contains("energystorage")) {
