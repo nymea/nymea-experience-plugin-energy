@@ -30,6 +30,12 @@ public:
     void removeThingLogs(const ThingId &thingId);
     QList<ThingId> loggedThings() const;
 
+    // For internal use, the energymanager needs to cache some values to track things total values
+    // This is really only here to have a single storage and not keep a separate cache file. Shouldn't be used for anything else
+    // Note that the returned ThingPowerLogEntry will be incomplete. It won't have a timestamp nor a currentPower value!
+    void cacheThingEntry(const ThingId &thingId, double totalEnergyConsumed, double totalEnergyProduced);
+    ThingPowerLogEntry cachedThingEntry(const ThingId &thingId);
+
 private slots:
     void sample();
 

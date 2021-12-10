@@ -79,7 +79,6 @@ void EnergyLogger::logPowerBalance(double consumption, double production, double
 
 void EnergyLogger::logThingPower(const ThingId &thingId, double currentPower, double totalConsumption, double totalProduction)
 {
-    qCDebug(dcEnergyExperience()) << "Logging thing power for" << thingId.toString() << "Current power:" << currentPower << "Total consumption:" << totalConsumption << "Total production:" << totalProduction;
     ThingPowerLogEntry entry(QDateTime::currentDateTime(), thingId, currentPower, totalConsumption, totalProduction);
 
     m_thingsPowerLiveLogs[thingId].prepend(entry);
@@ -177,6 +176,11 @@ ThingPowerLogEntries EnergyLogger::thingPowerLogs(SampleRate sampleRate, const Q
 
 PowerBalanceLogEntry EnergyLogger::latestLogEntry(SampleRate sampleRate)
 {
+    if (sampleRate == SampleRateAny) {
+        if (m_balanceLiveLog.count() > 0) {
+            return m_balanceLiveLog.first();
+        }
+    }
     QSqlQuery query(m_db);
     QString queryString = "SELECT MAX(timestamp), consumption, production, acquisition, storage, totalConsumption, totalProduction, totalAcquisition, totalReturn FROM powerBalance";
     QVariantList bindValues;
@@ -203,6 +207,12 @@ PowerBalanceLogEntry EnergyLogger::latestLogEntry(SampleRate sampleRate)
 
 ThingPowerLogEntry EnergyLogger::latestLogEntry(SampleRate sampleRate, const ThingId &thingId)
 {
+    if (sampleRate == SampleRateAny) {
+        if (m_thingsPowerLiveLogs.value(thingId).count() > 0) {
+            return m_thingsPowerLiveLogs.value(thingId).first();
+        }
+    }
+
     QSqlQuery query(m_db);
     query.prepare("SELECT MAX(timestamp), currentPower, totalConsumption, totalProduction from thingPower WHERE sampleRate = ? AND thingId = ?;");
     query.addBindValue(sampleRate);
@@ -245,6 +255,36 @@ QList<ThingId> EnergyLogger::loggedThings() const
         }
     }
     return ret;
+}
+
+void EnergyLogger::cacheThingEntry(const ThingId &thingId, double totalEnergyConsumed, double totalEnergyProduced)
+{
+    QSqlQuery query(m_db);
+    query.prepare("INSERT OR REPLACE INTO thingCache (thingId, totalEnergyConsumed, totalEnergyProduced) VALUES (?, ?, ?);");
+    query.addBindValue(thingId);
+    query.addBindValue(totalEnergyConsumed);
+    query.addBindValue(totalEnergyProduced);
+    query.exec();
+    if (query.lastError().isValid()) {
+        qCWarning(dcEnergyExperience()) << "Failed to store thing cache entry:" << query.lastError() << query.executedQuery();
+    }
+}
+
+ThingPowerLogEntry EnergyLogger::cachedThingEntry(const ThingId &thingId)
+{
+    QSqlQuery query(m_db);
+    query.prepare("SELECT * FROM thingCache WHERE thingId = ?;");
+    query.addBindValue(thingId);
+    query.exec();
+    if (query.lastError().isValid()) {
+        qCWarning(dcEnergyExperience()) << "Failed to retrieve thing cache entry:" << query.lastError() << query.executedQuery();
+        return ThingPowerLogEntry();
+    }
+    if (!query.next()) {
+        qCDebug(dcEnergyExperience()) << "No cached thing entry for" << thingId;
+        return ThingPowerLogEntry();
+    }
+    return ThingPowerLogEntry(QDateTime(), thingId, 0, query.value("totalEnergyConsumed").toDouble(), query.value("totalEnergyProduced").toDouble());
 }
 
 void EnergyLogger::sample()
@@ -375,6 +415,17 @@ bool EnergyLogger::initDB()
         return false;
     }
 
+    if (!m_db.tables().contains("metadata")) {
+        qCDebug(dcEnergyExperience()) << "No \metadata\" table in database. Creating it.";
+        m_db.exec("CREATE TABLE metadata (version INT);");
+        m_db.exec("INSERT INTO metadata (version) VALUES (1);");
+
+        if (m_db.lastError().isValid()) {
+            qCWarning(dcEnergyExperience()) << "Error creating metadata table in energy log database. Driver error:" << m_db.lastError().driverText() << "Database error:" << m_db.lastError().databaseText();
+            return false;
+        }
+    }
+
     if (!m_db.tables().contains("powerBalance")) {
         qCDebug(dcEnergyExperience()) << "No \"powerBalance\" table in database. Creating it.";
         m_db.exec("CREATE TABLE powerBalance "
@@ -410,6 +461,20 @@ bool EnergyLogger::initDB()
                   ");");
         if (m_db.lastError().isValid()) {
             qCWarning(dcEnergyExperience()) << "Error creating thingPower table in energy log database. Driver error:" << m_db.lastError().driverText() << "Database error:" << m_db.lastError().databaseText();
+            return false;
+        }
+    }
+
+    if (!m_db.tables().contains("thingCache")) {
+        qCDebug(dcEnergyExperience()) << "No \"thingCache\" table in database. Creating it.";
+        m_db.exec("CREATE TABLE thingCache "
+                  "("
+                  "thingId VARCHAR(38) PRIMARY KEY,"
+                  "totalEnergyConsumed FLOAT,"
+                  "totalEnergyProduced FLOAT"
+                  ");");
+        if (m_db.lastError().isValid()) {
+            qCWarning(dcEnergyExperience()) << "Error creating thingCache table in energy log database. Driver error:" << m_db.lastError().driverText() << "Database error:" << m_db.lastError().databaseText();
             return false;
         }
     }

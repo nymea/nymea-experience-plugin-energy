@@ -124,7 +124,7 @@ void EnergyManagerImpl::watchThing(Thing *thing)
         setRootMeter(thing->id());
     }
 
-    qCDebug(dcEnergyExperience()) << "Wathing thing:" << thing->name();
+    qCDebug(dcEnergyExperience()) << "Watching thing:" << thing->name();
 
     // React on things that require us updating the power balance
     if (thing->thingClass().interfaces().contains("energymeter")
@@ -143,14 +143,69 @@ void EnergyManagerImpl::watchThing(Thing *thing)
             || thing->thingClass().interfaces().contains("smartmeterproducer")
             || thing->thingClass().interfaces().contains("energystorage")) {
 
-        ThingPowerLogEntry entry = m_logger->latestLogEntry(EnergyLogs::SampleRate1Min, {thing->id()});
-        m_totalEnergyConsumedCache[thing] = entry.totalConsumption();
-        m_totalEnergyProducedCache[thing] = entry.totalProduction();
-        qCDebug(dcEnergyExperience()) << "Loaded thing power totals for" << thing->name() << "Consumption:" << entry.totalConsumption() << "Production:" << entry.totalProduction();
+        // Initialize caches used to calculate diffs
+        ThingPowerLogEntry entry = m_logger->latestLogEntry(EnergyLogs::SampleRateAny, {thing->id()});
+        ThingPowerLogEntry stateEntry = m_logger->cachedThingEntry(thing->id());
+
+        m_powerBalanceTotalEnergyConsumedCache[thing] = stateEntry.totalConsumption();
+        m_powerBalanceTotalEnergyProducedCache[thing] = stateEntry.totalProduction();
+
+        m_thingsTotalEnergyConsumedCache[thing] = qMakePair<double, double>(stateEntry.totalConsumption(), entry.totalConsumption());
+        m_thingsTotalEnergyProducedCache[thing] = qMakePair<double, double>(stateEntry.totalProduction(), entry.totalProduction());
+        qCDebug(dcEnergyExperience()) << "Loaded thing power totals for" << thing->name() << "Consumption:" << entry.totalConsumption() << "Production:" << entry.totalProduction() << "Last thing state consumption:" << stateEntry.totalConsumption() << "production:" << stateEntry.totalProduction();
 
         connect(thing, &Thing::stateValueChanged, this, [=](const StateTypeId &stateTypeId, const QVariant &/*value*/){
             if (QStringList({"currentPower", "totalEnergyConsumed", "totalEnergyProduced"}).contains(thing->thingClass().getStateType(stateTypeId).name())) {
-                m_logger->logThingPower(thing->id(), thing->state("currentPower").value().toDouble(), thing->state("totalEnergyConsumed").value().toDouble(), thing->state("totalEnergyProduced").value().toDouble());
+
+                // We'll be keeping our own counters, starting from 0 at the time they're added to nymea and increasing with the things counters.
+                // This way we'll have proper logs even if the thing counter is reset (some things may reset their counter on power loss, factory reset etc)
+                // and also won't start with huge values if the thing has been counting for a while and only added to nymea later on
+
+
+                // Consumption
+                double oldThingConsumptionState = m_thingsTotalEnergyConsumedCache.value(thing).first;
+                double oldThingConsumptionInternal = m_thingsTotalEnergyConsumedCache.value(thing).second;
+                double newThingConsumptionState = thing->stateValue("totalEnergyConsumed").toDouble();
+                // For the very first cycle (oldConsumption is 0) we'll sync up on the meter, without actually adding it to our diff
+                if (oldThingConsumptionState == 0 && newThingConsumptionState != 0) {
+                    qInfo(dcEnergyExperience()) << "Don't have a consumption counter for" << thing->name() << "Synching internal counters to initial value:" << newThingConsumptionState;
+                    oldThingConsumptionState = newThingConsumptionState;
+                }
+                // If the thing's meter has been reset in the meantime (newConsumption < oldConsumption) we'll sync down, taking the whole diff from 0 to new value
+                if (newThingConsumptionState < oldThingConsumptionState) {
+                    qCInfo(dcEnergyExperience()) << "Thing meter for" << thing->name() << "seems to have been reset. Re-synching internal consumption counter.";
+                    oldThingConsumptionState = newThingConsumptionState;
+                }
+                double consumptionDiff = newThingConsumptionState - oldThingConsumptionState;
+                double newThingConsumptionInternal = oldThingConsumptionInternal + consumptionDiff;
+                m_thingsTotalEnergyConsumedCache[thing] = qMakePair<double, double>(newThingConsumptionState, newThingConsumptionInternal);
+
+
+                // Production
+                double oldThingProductionState = m_thingsTotalEnergyProducedCache.value(thing).first;
+                double oldThingProductionInternal = m_thingsTotalEnergyProducedCache.value(thing).second;
+                double newThingProductionState = thing->stateValue("totalEnergyProduced").toDouble();
+                // For the very first cycle (oldProductino is 0) we'll sync up on the meter, without actually adding it to our diff
+                if (oldThingProductionState == 0 && newThingProductionState != 0) {
+                    qInfo(dcEnergyExperience()) << "Don't have a production counter for" << thing->name() << "Synching internal counter to initial value:" << newThingProductionState;
+                    oldThingProductionState = newThingProductionState;
+                }
+                // If the thing's meter has been reset in the meantime (newProduction < oldProduction) we'll sync down, taking the whole diff from 0 to new value
+                if (newThingProductionState < oldThingProductionState) {
+                    qCInfo(dcEnergyExperience()) << "Thing meter for" << thing->name() << "seems to have been reset. Re-synching internal production counter.";
+                    oldThingProductionState = newThingProductionState;
+                }
+                double productionDiff = newThingProductionState - oldThingProductionState;
+                double newThingProductionInternal = oldThingProductionInternal + productionDiff;
+                m_thingsTotalEnergyProducedCache[thing] = qMakePair<double, double>(newThingProductionState, newThingProductionInternal);
+
+
+                // Write to log
+                qCDebug(dcEnergyExperience()) << "Logging thing" << thing->name() << "total consumption:" << newThingConsumptionInternal << "production:" << newThingProductionInternal;
+                m_logger->logThingPower(thing->id(), thing->state("currentPower").value().toDouble(), newThingConsumptionInternal, newThingProductionInternal);
+
+                // Cache the thing state values in case nymea is restarted
+                m_logger->cacheThingEntry(thing->id(), newThingConsumptionState, newThingProductionState);
             }
         });
     }
@@ -172,38 +227,69 @@ void EnergyManagerImpl::updatePowerBalance()
     if (m_rootMeter) {
         currentPowerAcquisition = m_rootMeter->stateValue("currentPower").toDouble();
 
-        double oldAcquisition = m_totalEnergyConsumedCache.value(m_rootMeter);
+        double oldAcquisition = m_powerBalanceTotalEnergyConsumedCache.value(m_rootMeter);
         double newAcquisition = m_rootMeter->stateValue("totalEnergyConsumed").toDouble();
+        // For the very first cycle (oldAcquisition is 0) we'll sync up on the meter values without actually adding them to our balance.
+        if (oldAcquisition == 0) {
+            oldAcquisition = newAcquisition;
+        }
+        // If the root meter has been reset in the meantime (newConsumption < oldConsumption) we'll sync down, taking the whole diff from 0 to new value
+        if (newAcquisition < oldAcquisition) {
+            qCInfo(dcEnergyExperience()) << "Root meter seems to have been reset. Re-synching internal consumption counter.";
+            oldAcquisition = newAcquisition;
+        }
         qCDebug(dcEnergyExperience()) << "Root meter total consumption: Previous value:" << oldAcquisition << "New value:" << newAcquisition << "Diff:" << (newAcquisition -oldAcquisition);
         m_totalAcquisition += newAcquisition - oldAcquisition;
-        m_totalEnergyConsumedCache[m_rootMeter] = newAcquisition;
+        m_powerBalanceTotalEnergyConsumedCache[m_rootMeter] = newAcquisition;
 
-        double oldReturn = m_totalEnergyProducedCache.value(m_rootMeter);
+        double oldReturn = m_powerBalanceTotalEnergyProducedCache.value(m_rootMeter);
         double newReturn = m_rootMeter->stateValue("totalEnergyProduced").toDouble();
+        // For the very first cycle (oldReturn is 0) we'll sync up on the meter values without actually adding them to our balance.
+        if (oldReturn == 0) {
+            oldReturn = newReturn;
+        }
+        if (newReturn < oldReturn) {
+            qCInfo(dcEnergyExperience()) << "Root meter seems to have been reset. Re-synching internal production counter.";
+            oldReturn = newReturn;
+        }
         qCDebug(dcEnergyExperience()) << "Root meter total production: Previous value:" << oldReturn << "New value:" << newReturn << "Diff:" << (newReturn - oldReturn);
         m_totalReturn += newReturn - oldReturn;
-        m_totalEnergyProducedCache[m_rootMeter] = newReturn;
+        m_powerBalanceTotalEnergyProducedCache[m_rootMeter] = newReturn;
     }
 
     double currentPowerProduction = 0;
     foreach (Thing* thing, m_thingManager->configuredThings().filterByInterface("smartmeterproducer")) {
         currentPowerProduction += thing->stateValue("currentPower").toDouble();
-        double oldProduction = m_totalEnergyProducedCache.value(thing);
+        double oldProduction = m_powerBalanceTotalEnergyProducedCache.value(thing);
         double newProduction = thing->stateValue("totalEnergyProduced").toDouble();
+        // For the very first cycle (oldProduction is 0) we'll sync up on the producer values without actually adding them to our balance.
+        if (oldProduction == 0) {
+            oldProduction = newProduction;
+        }
+        if (newProduction < oldProduction) {
+            oldProduction = newProduction;
+        }
         qCDebug(dcEnergyExperience()) << "Producer" << thing->name() << "total production: Previous value:" << oldProduction << "New value:" << newProduction << "Diff:" << (newProduction - oldProduction);
         m_totalProduction += newProduction - oldProduction;
-        m_totalEnergyProducedCache[thing] = newProduction;
+        m_powerBalanceTotalEnergyProducedCache[thing] = newProduction;
     }
 
     double currentPowerStorage = 0;
     double totalFromStorage = 0;
     foreach (Thing *thing, m_thingManager->configuredThings().filterByInterface("energystorage")) {
         currentPowerStorage += thing->stateValue("currentPower").toDouble();
-        double oldProduction = m_totalEnergyProducedCache.value(thing);
+        double oldProduction = m_powerBalanceTotalEnergyProducedCache.value(thing);
         double newProduction = thing->stateValue("totalEnergyProduced").toDouble();
+        // For the very first cycle (oldProdction is 0) we'll sync up on the meter values without actually adding them to our balance.
+        if (oldProduction == 0) {
+            oldProduction = newProduction;
+        }
+        if (newProduction < oldProduction) {
+            oldProduction = newProduction;
+        }
         qCDebug(dcEnergyExperience()) << "Storage" << thing->name() << "total storage: Previous value:" << oldProduction << "New value:" << newProduction << "Diff:" << (newProduction - oldProduction);
         totalFromStorage += newProduction - oldProduction;
-        m_totalEnergyProducedCache[thing] = newProduction;
+        m_powerBalanceTotalEnergyProducedCache[thing] = newProduction;
     }
 
     double currentPowerConsumption = currentPowerAcquisition + qAbs(qMin(0.0, currentPowerProduction)) - currentPowerStorage;
