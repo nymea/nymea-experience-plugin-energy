@@ -51,11 +51,17 @@ EnergyJsonHandler::EnergyJsonHandler(EnergyManager *energyManager, QObject *pare
     params.clear(); returns.clear();
     description = "Get logs for one or more things power values. If thingIds is not given, logs for all energy related "
                   "things will be returned. If from is not given, the log will start at the beginning of recording. If "
-                  "to is not given, the logs will and at the last sample for this sample rate before now.";
+                  "to is not given, the logs will and at the last sample for this sample rate before now. If the parameter "
+                  "\"includeCurrent\" is set to true, the result will contain the newest log entries available, regardless "
+                  "of the sample rate (that is, 1 minute). This may be useful to calculate the difference to the newest "
+                  "entry of the fetched sample rate and the current values to display the live value until the current sample "
+                  "is completed.";
     params.insert("sampleRate", enumRef<EnergyLogs::SampleRate>());
     params.insert("o:thingIds", QVariantList() << enumValueName(Uuid));
     params.insert("o:from", enumValueName(Uint));
     params.insert("o:to", enumValueName(Uint));
+    params.insert("o:includeCurrent", enumValueName(Bool));
+    returns.insert("o:currentEntries", objectRef<ThingPowerLogEntries>());
     returns.insert("thingPowerLogEntries", objectRef<ThingPowerLogEntries>());
     registerMethod("GetThingPowerLogs", description, params, returns);
 
@@ -78,13 +84,13 @@ EnergyJsonHandler::EnergyJsonHandler(EnergyManager *energyManager, QObject *pare
     registerNotification("PowerBalanceChanged", description, params);
 
     params.clear();
-    description = "Emitted whenever a entry is added to the power balance log.";
+    description = "Emitted whenever an entry is added to the power balance log.";
     params.insert("sampleRate", enumRef<EnergyLogs::SampleRate>());
     params.insert("powerBalanceLogEntry", objectRef<PowerBalanceLogEntry>());
     registerNotification("PowerBalanceLogEntryAdded", description, params);
 
     params.clear();
-    description = "Emitted whenever a entry is added to the thing power log.";
+    description = "Emitted whenever an entry is added to the thing power log.";
     params.insert("sampleRate", enumRef<EnergyLogs::SampleRate>());
     params.insert("thingPowerLogEntry", objectRef<ThingPowerLogEntry>());
     registerNotification("ThingPowerLogEntryAdded", description, params);
@@ -189,5 +195,10 @@ JsonReply *EnergyJsonHandler::GetThingPowerLogs(const QVariantMap &params)
     QDateTime to = params.contains("to") ? QDateTime::fromMSecsSinceEpoch(params.value("to").toLongLong() * 1000) : QDateTime();
     QVariantMap returns;
     returns.insert("thingPowerLogEntries", pack(m_energyManager->logs()->thingPowerLogs(sampleRate, thingIds, from, to)));
+
+    if (params.contains("includeCurrent") && params.value("includeCurrent").toBool()) {
+        returns.insert("currentEntries", pack(m_energyManager->logs()->thingPowerLogs(EnergyLogs::SampleRate1Min, thingIds, QDateTime::currentDateTime().addSecs(-60))));
+    }
+
     return createReply(returns);
 }
