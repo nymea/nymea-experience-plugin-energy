@@ -293,7 +293,7 @@ void EnergyManagerImpl::updatePowerBalance()
     }
 
     double currentPowerConsumption = currentPowerAcquisition + qAbs(qMin(0.0, currentPowerProduction)) - currentPowerStorage;
-    m_totalConsumption = m_totalAcquisition + m_totalProduction + totalFromStorage;
+    m_totalConsumption = m_totalAcquisition + m_totalProduction + totalFromStorage - m_totalReturn;
 
     qCDebug(dcEnergyExperience()).noquote().nospace() << "Power balance: " << "🔥: " << currentPowerConsumption << " W, 🌞: " << currentPowerProduction << " W, 💵: " << currentPowerAcquisition << " W, 🔋: " << currentPowerStorage << " W. Totals: 🔥: " << m_totalConsumption << " kWh, 🌞: " << m_totalProduction << " kWh, 💵↓: " << m_totalAcquisition << " kWh, 💵↑: " << m_totalReturn << " kWh";
     if (currentPowerAcquisition != m_currentPowerAcquisition
