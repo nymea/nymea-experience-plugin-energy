@@ -1,3 +1,8 @@
+nymea-experience-plugin-energy (0.5) UNRELEASED; urgency=medium
+
+
+ -- Michael Zanetti <michael.zanetti@nymea.io>  Mon, 10 Jan 2022 14:13:56 +0100
+
 nymea-experience-plugin-energy (0.4) xenial; urgency=medium
 
   [ Michael Zanetti ]
