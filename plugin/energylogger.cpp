@@ -416,7 +416,7 @@ bool EnergyLogger::initDB()
     }
 
     if (!m_db.tables().contains("metadata")) {
-        qCDebug(dcEnergyExperience()) << "No \metadata\" table in database. Creating it.";
+        qCDebug(dcEnergyExperience()) << "No \"metadata\" table in database. Creating it.";
         m_db.exec("CREATE TABLE metadata (version INT);");
         m_db.exec("INSERT INTO metadata (version) VALUES (1);");
 
