@@ -1,3 +1,16 @@
+nymea-experience-plugin-energy (1.0.0) xenial; urgency=medium
+
+  [ Simon Stürz ]
+  * Fix debug print escape typo
+
+  [ Michael Zanetti ]
+  * Fix calculation of sample start for months and years
+  * Optimize energy logs DB rectification after system downtime
+
+  [ Jenkins ]
+
+ -- Jenkins <jenkins@nymea.io>  Sun, 27 Mar 2022 19:51:50 +0200
+
 nymea-experience-plugin-energy (0.4) xenial; urgency=medium
 
   [ Michael Zanetti ]
