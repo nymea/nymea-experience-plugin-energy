@@ -34,9 +34,9 @@ EnergyLogger::EnergyLogger(QObject *parent) : EnergyLogs(parent)
 
     m_maxMinuteSamples = 15;
 
-    addConfig(SampleRate15Mins, SampleRate1Min, 6720); // 10 weeks
-    addConfig(SampleRate1Hour, SampleRate15Mins, 1680); // 10 weeks
-    addConfig(SampleRate3Hours, SampleRate15Mins, 560); // 10 weeks
+    addConfig(SampleRate15Mins, SampleRate1Min, 2688); // 4 weeks
+    addConfig(SampleRate1Hour, SampleRate15Mins, 672); // 4 weeks
+    addConfig(SampleRate3Hours, SampleRate15Mins, 224); // 4 weeks
     addConfig(SampleRate1Day, SampleRate1Hour, 1095); // 3 years
     addConfig(SampleRate1Week, SampleRate1Day, 168); // 3 years
     addConfig(SampleRate1Month, SampleRate1Day, 240); // 20 years
@@ -56,9 +56,11 @@ EnergyLogger::EnergyLogger(QObject *parent) : EnergyLogs(parent)
     // Now all the data is initialized. We can start with sampling.
 
     // First check if we missed any samplings (e.g. because the system was offline at the time when it should have created a sample)
+    QDateTime startTime = QDateTime::currentDateTime();
     foreach(SampleRate sampleRate, m_configs.keys()) {
         rectifySamples(sampleRate, m_configs.value(sampleRate).baseSampleRate);
     }
+    qCDebug(dcEnergyExperience()) << "Resampled energy DB logs in" << startTime.msecsTo(QDateTime::currentDateTime()) << "ms.";
 
     // And start the sampler timer
     connect(&m_sampleTimer, &QTimer::timeout, this, &EnergyLogger::sample);
@@ -574,14 +576,27 @@ void EnergyLogger::rectifySamples(SampleRate sampleRate, SampleRate baseSampleRa
 //        qCDebug(dcEnergyExperience()) << "No sample at all so far. Using base as starting point.";
         newestSample = oldestBaseSample;
     }
+
 //    qCDebug(dcEnergyExperience()) << "next sample after last in series:" << nextSampleTimestamp(sampleRate, newestSample).toString();
 //    qCDebug(dcEnergyExperience()) << "next scheduled sample:" << m_nextSamples.value(sampleRate).toString();
-    while (!newestSample.isNull() && nextSampleTimestamp(sampleRate, newestSample) < m_nextSamples[sampleRate]) {
+    if (!newestSample.isNull() && nextSampleTimestamp(sampleRate, newestSample) < m_nextSamples[sampleRate]) {
+        // regularly sample one sample as there may be some valid samples in the base series
         QDateTime nextSample = nextSampleTimestamp(sampleRate, newestSample.addMSecs(1000));
-//        qCDebug(dcEnergyExperience()) << "Rectifying missed sample for" << sampleRate << "from" << nextSample.toString();
         samplePowerBalance(sampleRate, baseSampleRate, nextSample);
         newestSample = nextSample;
     }
+    // Now retrieve the last sample and just carry over totals
+    PowerBalanceLogEntry latest = latestLogEntry(sampleRate);
+    // We only need to rectify up to maxSamples, so don't bother with older ones
+    newestSample = qMax(newestSample, calculateSampleStart(m_nextSamples[sampleRate], sampleRate, m_configs.value(sampleRate).maxSamples));
+
+    m_db.transaction();
+    while (!newestSample.isNull() && nextSampleTimestamp(sampleRate, newestSample) < m_nextSamples[sampleRate]) {
+        QDateTime nextSample = nextSampleTimestamp(sampleRate, newestSample.addMSecs(1000));
+        insertPowerBalance(nextSample, sampleRate, 0, 0, 0, 0, latest.totalConsumption(), latest.totalProduction(), latest.totalAcquisition(), latest.totalReturn());
+        newestSample = nextSample;
+    }
+    m_db.commit();
 
     foreach (const ThingId &thingId, m_thingsPowerLiveLogs.keys()) {
         QDateTime oldestBaseSample = getOldestThingPowerSampleTimestamp(thingId, baseSampleRate);
@@ -595,12 +610,23 @@ void EnergyLogger::rectifySamples(SampleRate sampleRate, SampleRate baseSampleRa
         }
 //        qCDebug(dcEnergyExperience()) << "T next sample after last in series:" << nextSampleTimestamp(sampleRate, newestSample).toString();
 //        qCDebug(dcEnergyExperience()) << "T next scheduled sample:" << m_nextSamples.value(sampleRate).toString();
-        while (!newestSample.isNull() && nextSampleTimestamp(sampleRate, newestSample) < m_nextSamples[sampleRate]) {
+        if (!newestSample.isNull() && nextSampleTimestamp(sampleRate, newestSample) < m_nextSamples[sampleRate]) {
             QDateTime nextSample = nextSampleTimestamp(sampleRate, newestSample.addMSecs(1000));
-//            qCDebug(dcEnergyExperience()) << "T Rectifying missed sample for" << sampleRate << "from" << nextSample.toString();
             sampleThingPower(thingId, sampleRate, baseSampleRate, nextSample);
             newestSample = nextSample;
         }
+        // Now retrieve the last sample and just carry over totals
+        ThingPowerLogEntry latest = latestLogEntry(sampleRate, thingId);
+        // We only need to rectify up to maxSamples, so don't bother with older ones
+        newestSample = qMax(newestSample, calculateSampleStart(m_nextSamples[sampleRate], sampleRate, m_configs.value(sampleRate).maxSamples));
+
+        m_db.transaction();
+        while (!newestSample.isNull() && nextSampleTimestamp(sampleRate, newestSample) < m_nextSamples[sampleRate]) {
+            QDateTime nextSample = nextSampleTimestamp(sampleRate, newestSample.addMSecs(1000));
+            insertThingPower(nextSample, sampleRate, thingId, 0, latest.totalConsumption(), latest.totalProduction());
+            newestSample = nextSample;
+        }
+        m_db.commit();
     }
 }
 
