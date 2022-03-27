@@ -377,8 +377,9 @@ void EnergyLogger::sample()
     }
     foreach (SampleRate sampleRate, m_configs.keys()) {
         if (now >= m_nextSamples.value(sampleRate)) {
+            uint maxSamples = m_configs.value(sampleRate).maxSamples;
             QDateTime sampleTime = m_nextSamples.value(sampleRate);
-            QDateTime oldestTimestamp = sampleTime.addMSecs(-(qint64)m_configs.value(sampleRate).maxSamples * sampleRate * 60 * 1000);
+            QDateTime oldestTimestamp = calculateSampleStart(sampleTime, sampleRate, maxSamples);
             trimPowerBalance(sampleRate, oldestTimestamp);
             foreach (const ThingId &thingId, m_thingsPowerLiveLogs.keys()) {
                 trimThingPower(thingId, sampleRate, oldestTimestamp);
@@ -548,6 +549,16 @@ void EnergyLogger::scheduleNextSample(SampleRate sampleRate)
     qCDebug(dcEnergyExperience()) << "Next sample for" << sampleRate << "scheduled at" << next.toString();
 }
 
+QDateTime EnergyLogger::calculateSampleStart(const QDateTime &sampleEnd, SampleRate sampleRate, int sampleCount)
+{
+    if (sampleRate == SampleRate1Month) {
+        return sampleEnd.addMonths(-sampleCount);
+    } else if (sampleRate == SampleRate1Year) {
+        return sampleEnd.addYears(-sampleCount);
+    }
+    return sampleEnd.addMSecs(-(quint64)sampleCount * sampleRate * 60 * 1000);
+}
+
 void EnergyLogger::rectifySamples(SampleRate sampleRate, SampleRate baseSampleRate)
 {
     // Normally we'd need to find the newest available sample of a series and catch up from there.
@@ -640,7 +651,7 @@ QDateTime EnergyLogger::nextSampleTimestamp(SampleRate sampleRate, const QDateTi
 
 bool EnergyLogger::samplePowerBalance(SampleRate sampleRate, SampleRate baseSampleRate, const QDateTime &sampleEnd)
 {
-    QDateTime sampleStart = sampleEnd.addMSecs(-sampleRate * 60 * 1000);
+    QDateTime sampleStart = calculateSampleStart(sampleEnd, sampleRate);
 
     qCDebug(dcEnergyExperience()) << "Sampling power balance" << sampleRate << "from" << sampleStart << "to" << sampleEnd;
 
@@ -746,7 +757,7 @@ bool EnergyLogger::sampleThingsPower(SampleRate sampleRate, SampleRate baseSampl
 
 bool EnergyLogger::sampleThingPower(const ThingId &thingId, SampleRate sampleRate, SampleRate baseSampleRate, const QDateTime &sampleEnd)
 {
-    QDateTime sampleStart = sampleEnd.addMSecs(-sampleRate * 60 * 1000);
+    QDateTime sampleStart = calculateSampleStart(sampleEnd, sampleRate);
 
     qCDebug(dcEnergyExperience()) << "Sampling thing power for" << thingId.toString() << sampleRate << "from" << sampleStart.toString() << "to" << sampleEnd.toString();
 

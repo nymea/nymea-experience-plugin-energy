@@ -49,6 +49,7 @@ private:
 
     QDateTime nextSampleTimestamp(SampleRate sampleRate, const QDateTime &dateTime);
     void scheduleNextSample(SampleRate sampleRate);
+    QDateTime calculateSampleStart(const QDateTime &sampleEnd, SampleRate sampleRate, int sampleCount = 1);
 
     void rectifySamples(SampleRate sampleRate, EnergyLogger::SampleRate baseSampleRate);
 
@@ -66,7 +67,7 @@ private:
 private:
     struct SampleConfig {
         SampleRate baseSampleRate;
-        int maxSamples = 0;
+        uint maxSamples = 0;
     };
 
     PowerBalanceLogEntries m_balanceLiveLog;
