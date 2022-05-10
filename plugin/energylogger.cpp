@@ -42,7 +42,7 @@ EnergyLogger::EnergyLogger(QObject *parent) : EnergyLogs(parent)
     addConfig(SampleRate1Month, SampleRate1Day, 240); // 20 years
     addConfig(SampleRate1Year, SampleRate1Month, 20); // 20 years
 
-    // Load last values from thingsPort logs so we have at least one base sample available for sampling, even if a thing might not produce any logs for a while.
+    // Load last values from thingsPower logs so we have at least one base sample available for sampling, even if a thing might not produce any logs for a while.
     foreach (const ThingId &thingId, loggedThings()) {
         m_thingsPowerLiveLogs[thingId].append(latestLogEntry(SampleRate1Min, thingId));
     }
@@ -60,7 +60,7 @@ EnergyLogger::EnergyLogger(QObject *parent) : EnergyLogs(parent)
     foreach(SampleRate sampleRate, m_configs.keys()) {
         rectifySamples(sampleRate, m_configs.value(sampleRate).baseSampleRate);
     }
-    qCDebug(dcEnergyExperience()) << "Resampled energy DB logs in" << startTime.msecsTo(QDateTime::currentDateTime()) << "ms.";
+    qCInfo(dcEnergyExperience()) << "Resampled energy DB logs in" << startTime.msecsTo(QDateTime::currentDateTime()) << "ms.";
 
     // And start the sampler timer
     connect(&m_sampleTimer, &QTimer::timeout, this, &EnergyLogger::sample);
@@ -233,6 +233,8 @@ ThingPowerLogEntry EnergyLogger::latestLogEntry(SampleRate sampleRate, const Thi
 
 void EnergyLogger::removeThingLogs(const ThingId &thingId)
 {
+    m_thingsPowerLiveLogs.remove(thingId);
+
     QSqlQuery query(m_db);
     query.prepare("DELETE FROM thingPower WHERE thingId = ?;");
     query.addBindValue(thingId);
@@ -570,10 +572,11 @@ void EnergyLogger::rectifySamples(SampleRate sampleRate, SampleRate baseSampleRa
     QDateTime oldestBaseSample = getOldestPowerBalanceSampleTimestamp(baseSampleRate);
     QDateTime newestSample = getNewestPowerBalanceSampleTimestamp(sampleRate);
 
-    qCDebug(dcEnergyExperience()) << "Checking for missing samples for" << sampleRate;
-//    qCDebug(dcEnergyExperience()) << "Newest sample:" << newestSample.toString() << "Oldest base sample:" << oldestBaseSample.toString();
+    QDateTime startTime = QDateTime::currentDateTime();
+    qCDebug(dcEnergyExperience()) << "Checking for missing power balance samples for" << sampleRate;
+    qCDebug(dcEnergyExperience()) << "Newest sample:" << newestSample.toString() << "Oldest base sample:" << oldestBaseSample.toString();
     if (newestSample.isNull()) {
-//        qCDebug(dcEnergyExperience()) << "No sample at all so far. Using base as starting point.";
+        qCDebug(dcEnergyExperience()) << "No sample at all so far. Using base as starting point.";
         newestSample = oldestBaseSample;
     }
 
@@ -588,24 +591,34 @@ void EnergyLogger::rectifySamples(SampleRate sampleRate, SampleRate baseSampleRa
     // Now retrieve the last sample and just carry over totals
     PowerBalanceLogEntry latest = latestLogEntry(sampleRate);
     // We only need to rectify up to maxSamples, so don't bother with older ones
-    newestSample = qMax(newestSample, calculateSampleStart(m_nextSamples[sampleRate], sampleRate, m_configs.value(sampleRate).maxSamples));
+    if (!newestSample.isNull()) {
+        newestSample = qMax(newestSample, calculateSampleStart(m_nextSamples[sampleRate], sampleRate, m_configs.value(sampleRate).maxSamples));
+    }
 
     m_db.transaction();
+    int count = 0;
     while (!newestSample.isNull() && nextSampleTimestamp(sampleRate, newestSample) < m_nextSamples[sampleRate]) {
         QDateTime nextSample = nextSampleTimestamp(sampleRate, newestSample.addMSecs(1000));
         insertPowerBalance(nextSample, sampleRate, 0, 0, 0, 0, latest.totalConsumption(), latest.totalProduction(), latest.totalAcquisition(), latest.totalReturn());
         newestSample = nextSample;
+        count++;
     }
     m_db.commit();
+    qCDebug(dcEnergyExperience()) << "Done rectifying" << count << "power balance samples for" << sampleRate << "in" << startTime.msecsTo(QDateTime::currentDateTime()) << "ms";
 
     foreach (const ThingId &thingId, m_thingsPowerLiveLogs.keys()) {
         QDateTime oldestBaseSample = getOldestThingPowerSampleTimestamp(thingId, baseSampleRate);
         QDateTime newestSample = getNewestThingPowerSampleTimestamp(thingId, sampleRate);
 
-//        qCDebug(dcEnergyExperience()) << "T Checking for missing samples for" << sampleRate;
-//        qCDebug(dcEnergyExperience()) << "T Newest sample:" << newestSample.toString() << "Oldest base sample:" << oldestBaseSample.toString();
+        QDateTime startTime = QDateTime::currentDateTime();
+        qCDebug(dcEnergyExperience()) << "Checking for missing thing samples for" << sampleRate << "for thing" << thingId;
+        qCDebug(dcEnergyExperience()) << "Newest sample:" << newestSample.toString() << "Oldest base sample:" << oldestBaseSample.toString();
         if (newestSample.isNull()) {
-//            qCDebug(dcEnergyExperience()) << "T No sample at all so far. Using base as starting point.";
+            qCDebug(dcEnergyExperience()) << "No sample at all so far. Using base as starting point.";
+            if (oldestBaseSample.isNull()) {
+                qCDebug(dcEnergyExperience()) << "Base series doesn't have any samples either. Skipping resampling for" << sampleRate << "for" << thingId;
+                continue;
+            }
             newestSample = oldestBaseSample;
         }
 //        qCDebug(dcEnergyExperience()) << "T next sample after last in series:" << nextSampleTimestamp(sampleRate, newestSample).toString();
@@ -621,12 +634,15 @@ void EnergyLogger::rectifySamples(SampleRate sampleRate, SampleRate baseSampleRa
         newestSample = qMax(newestSample, calculateSampleStart(m_nextSamples[sampleRate], sampleRate, m_configs.value(sampleRate).maxSamples));
 
         m_db.transaction();
+        int count = 0;
         while (!newestSample.isNull() && nextSampleTimestamp(sampleRate, newestSample) < m_nextSamples[sampleRate]) {
             QDateTime nextSample = nextSampleTimestamp(sampleRate, newestSample.addMSecs(1000));
             insertThingPower(nextSample, sampleRate, thingId, 0, latest.totalConsumption(), latest.totalProduction());
             newestSample = nextSample;
+            count++;
         }
         m_db.commit();
+        qCDebug(dcEnergyExperience()) << "Done rectifying" << count << "thing power samples for" << sampleRate << " for" << thingId << "in" << startTime.msecsTo(QDateTime::currentDateTime()) << "ms";
     }
 }
 
