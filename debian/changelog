@@ -1,3 +1,10 @@
+nymea-experience-plugin-energy (1.1.0) jammy; urgency=medium
+
+  [ Michael Zanetti ]
+  * Fix thingIds not being removed properly
+
+ -- jenkins <developer@nymea.io>  Tue, 10 May 2022 09:56:31 +0200
+
 nymea-experience-plugin-energy (1.0.0) xenial; urgency=medium
 
   [ Simon Stürz ]
