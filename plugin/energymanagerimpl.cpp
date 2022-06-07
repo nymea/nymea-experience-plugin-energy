@@ -64,7 +64,7 @@ EnergyManager::EnergyError EnergyManagerImpl::setRootMeter(const ThingId &rootMe
         m_rootMeter = rootMeter;
 
         QSettings settings(NymeaSettings::settingsPath() + "/energy.conf", QSettings::IniFormat);
-        settings.setValue("rootMeterThingId", rootMeter->id());
+        settings.setValue("rootMeterThingId", rootMeter->id().toString());
 
         emit rootMeterChanged();
     }

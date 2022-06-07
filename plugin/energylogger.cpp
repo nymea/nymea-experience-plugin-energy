@@ -325,7 +325,7 @@ void EnergyLogger::sample()
         medianAcquisition /= sampleStart.msecsTo(sampleEnd);
         medianStorage /= sampleStart.msecsTo(sampleEnd);
 
-        PowerBalanceLogEntry newest = m_balanceLiveLog.count() > 0 ? m_balanceLiveLog.at(0) : PowerBalanceLogEntry();
+        PowerBalanceLogEntry newest = latestLogEntry(SampleRateAny);
         double totalConsumption = newest.totalConsumption();
         double totalProduction = newest.totalProduction();
         double totalAcquisition = newest.totalAcquisition();
@@ -351,7 +351,7 @@ void EnergyLogger::sample()
             }
             medianPower /= sampleStart.msecsTo(sampleEnd);
 
-            ThingPowerLogEntry newest = entries.count() > 0 ? entries.first() : ThingPowerLogEntry();
+            ThingPowerLogEntry newest = latestLogEntry(SampleRateAny, thingId);
             double totalConsumption = newest.totalConsumption();
             double totalProduction = newest.totalProduction();
 
