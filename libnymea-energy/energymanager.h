@@ -71,6 +71,9 @@ public:
 signals:
     void rootMeterChanged();
     void powerBalanceChanged();
+    void powerBalanceSampled(EnergyLogs::SampleRate sampleRate, const PowerBalanceLogEntry &entry);
+    void thingPowerSampled(EnergyLogs::SampleRate sampleRate, const ThingPowerLogEntry &entry);
+
 };
 
 #endif // ENERGYMANAGER_H

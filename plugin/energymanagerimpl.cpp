@@ -45,6 +45,9 @@ EnergyManagerImpl::EnergyManagerImpl(ThingManager *thingManager, QObject *parent
             m_logger->removeThingLogs(thingId);
         }
     }
+
+    connect(m_logger, &EnergyLogs::powerBalanceEntryAdded, this, &EnergyManager::powerBalanceSampled);
+    connect(m_logger, &EnergyLogs::thingPowerEntryAdded, this, &EnergyManager::thingPowerSampled);
 }
 
 Thing *EnergyManagerImpl::rootMeter() const
