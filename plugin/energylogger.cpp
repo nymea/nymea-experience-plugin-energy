@@ -32,7 +32,8 @@ EnergyLogger::EnergyLogger(QObject *parent) : EnergyLogs(parent)
     // 10000 entries, with 5 energy things => ~4MB
     // Note: use sqlite3_analyzer to see the approx. size per entry in each table.
 
-    m_maxMinuteSamples = 15;
+    // One day 1440 min, let's keep one week
+    m_maxMinuteSamples = 10080;
 
     addConfig(SampleRate15Mins, SampleRate1Min, 2688); // 4 weeks
     addConfig(SampleRate1Hour, SampleRate15Mins, 672); // 4 weeks
