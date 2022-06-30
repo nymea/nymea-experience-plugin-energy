@@ -1,3 +1,10 @@
+nymea-experience-plugin-energy (1.3.0) jammy; urgency=medium
+
+  [ Simon Stürz ]
+  * Keep the minutes based samples for at least one week
+
+ -- jenkins <developer@nymea.io>  Thu, 30 Jun 2022 15:06:00 +0200
+
 nymea-experience-plugin-energy (1.2.0) jammy; urgency=medium
 
   [ Michael Zanetti ]
