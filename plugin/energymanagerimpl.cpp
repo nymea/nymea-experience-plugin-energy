@@ -173,7 +173,7 @@ void EnergyManagerImpl::watchThing(Thing *thing)
                 }
                 // If the thing's meter has been reset in the meantime (newConsumption < oldConsumption) we'll sync down, taking the whole diff from 0 to new value
                 if (newThingConsumptionState < oldThingConsumptionState) {
-                    qCInfo(dcEnergyExperience()) << "Thing meter for" << thing->name() << "seems to have been reset. Re-synching internal consumption counter.";
+                    qCInfo(dcEnergyExperience()).nospace() << "Thing meter for " << thing->name() << " seems to have been reset. Old value: " << oldThingConsumptionState << " New value: " << newThingConsumptionState << ". Re-synching internal consumption counter.";
                     oldThingConsumptionState = newThingConsumptionState;
                 }
                 double consumptionDiff = newThingConsumptionState - oldThingConsumptionState;
