@@ -19,13 +19,13 @@ EnergyJsonHandler::EnergyJsonHandler(EnergyManager *energyManager, QObject *pare
     params.clear(); returns.clear();
     description = "Get the root meter ID. If there is no root meter set, the params will be empty.";
     returns.insert("o:rootMeterThingId", enumValueName(Uuid));
-    registerMethod("GetRootMeter", description, params, returns);
+    registerMethod("GetRootMeter", description, params, returns, Types::PermissionScopeNone);
 
     params.clear(); returns.clear();
     description = "Set the root meter.";
     params.insert("rootMeterThingId", enumValueName(Uuid));
     returns.insert("energyError", enumRef<EnergyManager::EnergyError>());
-    registerMethod("SetRootMeter", description, params, returns);
+    registerMethod("SetRootMeter", description, params, returns, Types::PermissionScopeAdmin);
 
     params.clear(); returns.clear();
     description = "Get the current power balance. That is, production, consumption and acquisition.";
@@ -37,7 +37,7 @@ EnergyJsonHandler::EnergyJsonHandler(EnergyManager *energyManager, QObject *pare
     returns.insert("totalProduction", enumValueName(Double));
     returns.insert("totalAcquisition", enumValueName(Double));
     returns.insert("totalReturn", enumValueName(Double));
-    registerMethod("GetPowerBalance", description, params, returns);
+    registerMethod("GetPowerBalance", description, params, returns, Types::PermissionScopeNone);
 
     params.clear(); returns.clear();
     description = "Get logs for the power balance. If from is not give, the log will start at the beginning of "
@@ -46,7 +46,7 @@ EnergyJsonHandler::EnergyJsonHandler(EnergyManager *energyManager, QObject *pare
     params.insert("o:from", enumValueName(Uint));
     params.insert("o:to", enumValueName(Uint));
     returns.insert("powerBalanceLogEntries", objectRef<PowerBalanceLogEntries>());
-    registerMethod("GetPowerBalanceLogs", description, params, returns);
+    registerMethod("GetPowerBalanceLogs", description, params, returns, Types::PermissionScopeNone);
 
     params.clear(); returns.clear();
     description = "Get logs for one or more things power values. If thingIds is not given, logs for all energy related "
@@ -63,7 +63,7 @@ EnergyJsonHandler::EnergyJsonHandler(EnergyManager *energyManager, QObject *pare
     params.insert("o:includeCurrent", enumValueName(Bool));
     returns.insert("o:currentEntries", objectRef<ThingPowerLogEntries>());
     returns.insert("thingPowerLogEntries", objectRef<ThingPowerLogEntries>());
-    registerMethod("GetThingPowerLogs", description, params, returns);
+    registerMethod("GetThingPowerLogs", description, params, returns, Types::PermissionScopeNone);
 
     params.clear();
     description = "Emitted whenever the root meter id changes. If the root meter has been unset, the params will be empty.";
