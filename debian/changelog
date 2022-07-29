@@ -1,3 +1,11 @@
+nymea-experience-plugin-energy (1.4.0) jammy; urgency=medium
+
+  [ Michael Zanetti ]
+  * Improve a debug print when internal counters are re-synced
+  * Fix permissions in json handler
+
+ -- jenkins <developer@nymea.io>  Fri, 29 Jul 2022 15:45:21 +0200
+
 nymea-experience-plugin-energy (1.3.1) jammy; urgency=medium
 
 
