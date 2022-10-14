@@ -1,6 +1,6 @@
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 *
-* Copyright 2013 - 2020, nymea GmbH
+* Copyright 2013 - 2022, nymea GmbH
 * Contact: contact@nymea.io
 *
 * This file is part of nymea.
@@ -81,18 +81,30 @@ void ExperiencePluginEnergy::loadPlugins()
 
 QStringList ExperiencePluginEnergy::pluginSearchDirs() const
 {
+    const char *envDefaultPath = "NYMEA_ENERGY_PLUGINS_PATH";
+    const char *envExtraPath = "NYMEA_ENERGY_PLUGINS_EXTRA_PATH";
+
     QStringList searchDirs;
-    QByteArray envPath = qgetenv("NYMEA_ENERGY_PLUGINS_PATH");
-    if (!envPath.isEmpty()) {
-        searchDirs << QString(envPath).split(':');
+    QByteArray envExtraPathData = qgetenv(envExtraPath);
+    if (!envExtraPathData.isEmpty()) {
+        searchDirs << QString::fromUtf8(envExtraPathData).split(':');
     }
 
-    foreach (QString libraryPath, QCoreApplication::libraryPaths()) {
-        searchDirs << libraryPath.replace("qt5", "nymea").replace("plugins", "energy");
+    if (qEnvironmentVariableIsSet(envDefaultPath)) {
+        QByteArray envDefaultPathData = qgetenv(envDefaultPath);
+        if (!envDefaultPathData.isEmpty()) {
+            searchDirs << QString::fromUtf8(envDefaultPathData).split(':');
+        }
+    } else {
+        foreach (QString libraryPath, QCoreApplication::libraryPaths()) {
+            searchDirs << libraryPath.replace("qt5", "nymea").replace("plugins", "energy");
+        }
+        searchDirs << QDir(QCoreApplication::applicationDirPath() + "/../lib/nymea/energy").absolutePath();
+        searchDirs << QDir(QCoreApplication::applicationDirPath() + "/../energy/").absolutePath();
+        searchDirs << QDir(QCoreApplication::applicationDirPath() + "/../../../energy/").absolutePath();
     }
-    searchDirs << QCoreApplication::applicationDirPath() + "/../lib/nymea/energy";
-    searchDirs << QCoreApplication::applicationDirPath() + "/../energy/";
-    searchDirs << QCoreApplication::applicationDirPath() + "/../../../energy/";
+
+    searchDirs.removeDuplicates();
     return searchDirs;
 }
 
