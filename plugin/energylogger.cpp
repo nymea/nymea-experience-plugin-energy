@@ -29,15 +29,15 @@ EnergyLogger::EnergyLogger(QObject *parent) : EnergyLogs(parent)
     // SQLite adds metadata and overhead of about 5%
     // The resulting database size can be estimated with (count being the sum of all numbers below):
     // (count * 50 bytes) + (count * things * 60 bytes) + 5%
-    // 10000 entries, with 5 energy things => ~4MB
+    // ~40000 entries, with 5 energy things => ~15MB
     // Note: use sqlite3_analyzer to see the approx. size per entry in each table.
 
     // One day 1440 min, let's keep one week
     m_maxMinuteSamples = 10080;
 
-    addConfig(SampleRate15Mins, SampleRate1Min, 2688); // 4 weeks
-    addConfig(SampleRate1Hour, SampleRate15Mins, 672); // 4 weeks
-    addConfig(SampleRate3Hours, SampleRate15Mins, 224); // 4 weeks
+    addConfig(SampleRate15Mins, SampleRate1Min, 16128); // 6 months
+    addConfig(SampleRate1Hour, SampleRate15Mins, 8760); // 1 year
+    addConfig(SampleRate3Hours, SampleRate15Mins, 2920); // 1 year
     addConfig(SampleRate1Day, SampleRate1Hour, 1095); // 3 years
     addConfig(SampleRate1Week, SampleRate1Day, 168); // 3 years
     addConfig(SampleRate1Month, SampleRate1Day, 240); // 20 years
