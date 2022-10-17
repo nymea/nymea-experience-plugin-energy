@@ -7,6 +7,7 @@
 #include <QSqlQuery>
 #include <QSqlError>
 #include <QSqlRecord>
+#include <QSqlIndex>
 #include <QSettings>
 
 #include <QLoggingCategory>
@@ -453,6 +454,11 @@ bool EnergyLogger::initDB()
             return false;
         }
     }
+    m_db.exec("CREATE INDEX IF NOT EXISTS idx_powerBalance ON powerBalance(sampleRate, timestamp);");
+    if (m_db.lastError().isValid()) {
+        qCWarning(dcEnergyExperience()) << "Error creating powerBalance table index in energy log database. Driver error:" << m_db.lastError().driverText() << "Database error:" << m_db.lastError().databaseText();
+        return false;
+    }
 
     if (!m_db.tables().contains("thingPower")) {
         qCDebug(dcEnergyExperience()) << "No \"thingPower\" table in database. Creating it.";
@@ -469,6 +475,11 @@ bool EnergyLogger::initDB()
             qCWarning(dcEnergyExperience()) << "Error creating thingPower table in energy log database. Driver error:" << m_db.lastError().driverText() << "Database error:" << m_db.lastError().databaseText();
             return false;
         }
+    }
+    m_db.exec("CREATE INDEX IF NOT EXISTS idx_thingPower ON thingPower(thingId, sampleRate, timestamp);");
+    if (m_db.lastError().isValid()) {
+        qCWarning(dcEnergyExperience()) << "Error creating thingPower table index in energy log database. Driver error:" << m_db.lastError().driverText() << "Database error:" << m_db.lastError().databaseText();
+        return false;
     }
 
     if (!m_db.tables().contains("thingCache")) {
