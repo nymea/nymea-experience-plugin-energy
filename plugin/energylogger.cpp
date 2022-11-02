@@ -682,6 +682,10 @@ QDateTime EnergyLogger::nextSampleTimestamp(SampleRate sampleRate, const QDateTi
     case SampleRate3Hours:
         time.setHMS(time.hour() - (time.hour() % 3), 0, 0);
         next = QDateTime(date, time).addMSecs(3 * 60 * 60 * 1000);
+        if (next.time().hour() == 2) {
+            qCDebug(dcEnergyExperience()) << "DST switch detected!";
+            next = next.addMSecs(60 * 60 * 1000);
+        }
         break;
     case SampleRate1Day:
         next = QDateTime(date, QTime()).addDays(1);
