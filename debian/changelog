@@ -1,3 +1,10 @@
+nymea-experience-plugin-energy (1.5.1) jammy; urgency=medium
+
+  [ Michael Zanetti ]
+  * Fix a lockup when resampling over a backwards DST switch
+
+ -- jenkins <developer@nymea.io>  Mon, 07 Nov 2022 12:49:10 +0100
+
 nymea-experience-plugin-energy (1.5.0) jammy; urgency=medium
 
   [ Michael Zanetti ]
