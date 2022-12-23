@@ -1,3 +1,8 @@
+nymea-experience-plugin-energy (1.6.1) jammy; urgency=medium
+
+
+ -- jenkins <developer@nymea.io>  Fri, 23 Dec 2022 11:33:25 +0100
+
 nymea-experience-plugin-energy (1.6.0) jammy; urgency=medium
 
   [ Michael Zanetti ]
