@@ -186,7 +186,7 @@ PowerBalanceLogEntry EnergyLogger::latestLogEntry(SampleRate sampleRate)
         }
     }
     QSqlQuery query(m_db);
-    QString queryString = "SELECT MAX(timestamp), consumption, production, acquisition, storage, totalConsumption, totalProduction, totalAcquisition, totalReturn FROM powerBalance";
+    QString queryString = "SELECT MAX(timestamp) as timestamp, consumption, production, acquisition, storage, totalConsumption, totalProduction, totalAcquisition, totalReturn FROM powerBalance";
     QVariantList bindValues;
     if (sampleRate != SampleRateAny) {
         queryString += " WHERE sampleRate = ?";
@@ -218,7 +218,7 @@ ThingPowerLogEntry EnergyLogger::latestLogEntry(SampleRate sampleRate, const Thi
     }
 
     QSqlQuery query(m_db);
-    query.prepare("SELECT MAX(timestamp), currentPower, totalConsumption, totalProduction from thingPower WHERE sampleRate = ? AND thingId = ?;");
+    query.prepare("SELECT MAX(timestamp) as timestamp, currentPower, totalConsumption, totalProduction from thingPower WHERE sampleRate = ? AND thingId = ?;");
     query.addBindValue(sampleRate);
     query.addBindValue(thingId);
     if (!query.exec()) {
@@ -301,7 +301,30 @@ void EnergyLogger::sample()
         QDateTime sampleEnd = m_nextSamples.value(SampleRate1Min);
         QDateTime sampleStart = sampleEnd.addMSecs(-60 * 1000);
 
-        qCDebug(dcEnergyExperience()) << "Sampling power balance for 1 min" << sampleEnd.toString();
+        PowerBalanceLogEntry newestInDB = latestLogEntry(SampleRate1Min);
+
+        qCDebug(dcEnergyExperience()) << "Sampling power balance for 1 min from" << sampleStart.toString() << sampleEnd.toString() << "newest in DB:" << newestInDB.timestamp().toString();
+
+        if (newestInDB.timestamp().isValid() && newestInDB.timestamp() < sampleStart) {
+            QDateTime oldestTimestamp = sampleStart.addMSecs(-(qint64)m_maxMinuteSamples * 60 * 1000);
+            QDateTime timestamp = newestInDB.timestamp();
+            if (oldestTimestamp > newestInDB.timestamp()) {
+                // In this case we'd be adding m_maxMinuteSamples of 0 values but trim anything before
+                // Spare the time by just adding the latest one to keep the totals
+                timestamp = sampleStart.addMSecs(-60000);
+            }
+            qCWarning(dcEnergyExperience()).nospace() << "Clock skew detected. Adding missing samples.";
+            QDateTime now = QDateTime::currentDateTime();
+            int i = 0;
+            m_db.transaction();
+            while (timestamp < sampleStart) {
+                timestamp = timestamp.addMSecs(60000);
+                insertPowerBalance(timestamp, SampleRate1Min, 0, 0, 0, 0, newestInDB.totalConsumption(), newestInDB.totalProduction(), newestInDB.totalAcquisition(), newestInDB.totalReturn());
+                i++;
+            }
+            m_db.commit();
+            qCDebug(dcEnergyExperience()) << "Added missing" << i << "minute-samples in" << now.msecsTo(QDateTime::currentDateTime()) << "ms";
+        }
 
         double medianConsumption = 0;
         double medianProduction = 0;
@@ -337,8 +360,27 @@ void EnergyLogger::sample()
         insertPowerBalance(sampleEnd, SampleRate1Min, medianConsumption, medianProduction, medianAcquisition, medianStorage, totalConsumption, totalProduction, totalAcquisition, totalReturn);
 
         foreach (const ThingId &thingId, m_thingsPowerLiveLogs.keys()) {
+
+            ThingPowerLogEntry newestInDB = latestLogEntry(SampleRate1Min, thingId);
+            qCDebug(dcEnergyExperience()) << "Sampling thing power for" << thingId.toString() << SampleRate1Min << "from" << sampleStart.toString() << "to" <<  sampleEnd.toString() << "newest in DB" << newestInDB.timestamp().toString();
+
+            if (newestInDB.timestamp().isValid() && newestInDB.timestamp() < sampleStart) {
+                QDateTime oldestTimestamp = sampleStart.addMSecs(-(qint64)m_maxMinuteSamples * 60 * 1000);
+                QDateTime timestamp = qMax(newestInDB.timestamp(), oldestTimestamp);
+                qCWarning(dcEnergyExperience()).nospace() << "Clock skew detected. Adding missing samples.";
+                QDateTime now = QDateTime::currentDateTime();
+                int i = 0;
+                m_db.transaction();
+                while (timestamp < sampleStart) {
+                    timestamp = timestamp.addMSecs(60000);
+                    insertThingPower(timestamp, SampleRate1Min, thingId, 0, newestInDB.totalConsumption(), newestInDB.totalProduction());
+                    i++;
+                }
+                m_db.commit();
+                qCDebug(dcEnergyExperience()) << "Added missing" << i << "minute-samples in" << now.msecsTo(QDateTime::currentDateTime()) << "ms";
+            }
+
             double medianPower = 0;
-            qCDebug(dcEnergyExperience()) << "Sampling thing power for" << thingId.toString() << SampleRate1Min << sampleEnd.toString();
             ThingPowerLogEntries entries = m_thingsPowerLiveLogs.value(thingId);
             for (int i = 0; i < entries.count(); i++) {
                 const ThingPowerLogEntry &entry = entries.at(i);
@@ -367,6 +409,14 @@ void EnergyLogger::sample()
         if (now >= m_nextSamples.value(sampleRate)) {
             QDateTime sampleTime = m_nextSamples.value(sampleRate);
             SampleRate baseSampleRate = m_configs.value(sampleRate).baseSampleRate;
+            QDateTime sampleStart = calculateSampleStart(sampleTime, sampleRate);
+            QDateTime newestInDB = getNewestPowerBalanceSampleTimestamp(sampleRate);
+
+            if (newestInDB < sampleStart) {
+                qCWarning(dcEnergyExperience()) << "Clock skew detected. Recovering samples...";
+                rectifySamples(sampleRate, baseSampleRate);
+            }
+
             samplePowerBalance(sampleRate, baseSampleRate, sampleTime);
             sampleThingsPower(sampleRate, baseSampleRate, sampleTime);
         }
@@ -816,7 +866,6 @@ bool EnergyLogger::sampleThingsPower(SampleRate sampleRate, SampleRate baseSampl
 bool EnergyLogger::sampleThingPower(const ThingId &thingId, SampleRate sampleRate, SampleRate baseSampleRate, const QDateTime &sampleEnd)
 {
     QDateTime sampleStart = calculateSampleStart(sampleEnd, sampleRate);
-
     qCDebug(dcEnergyExperience()) << "Sampling thing power for" << thingId.toString() << sampleRate << "from" << sampleStart.toString() << "to" << sampleEnd.toString();
 
     double medianCurrentPower = 0;
