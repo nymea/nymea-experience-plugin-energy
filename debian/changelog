@@ -1,3 +1,10 @@
+nymea-experience-plugin-energy (1.7.0) jammy; urgency=medium
+
+  [ Michael Zanetti ]
+  * Fill in holes in the logs when the clock is changed forward
+
+ -- jenkins <developer@nymea.io>  Tue, 21 Feb 2023 17:45:48 +0100
+
 nymea-experience-plugin-energy (1.6.3) jammy; urgency=medium
 
 
