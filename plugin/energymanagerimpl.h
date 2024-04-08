@@ -1,6 +1,6 @@
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 *
-* Copyright 2013 - 2024, nymea GmbH
+* Copyright 2013 - 2025, nymea GmbH
 * Contact: contact@nymea.io
 *
 * This file is part of nymea.
@@ -35,7 +35,7 @@
 #include <QHash>
 #include <QTimer>
 
-#include "integrations/thingmanager.h"
+#include <integrations/thingmanager.h>
 
 #include "energymanager.h"
 
@@ -59,7 +59,7 @@ public:
     double totalAcquisition() const override;
     double totalReturn() const override;
 
-    EnergyLogs* logs() const override;
+    EnergyLogs *logs() const override;
 
 private:
     void watchThing(Thing *thing);
@@ -94,14 +94,14 @@ private:
 
     // For things totals we need to cache 2 values:
     // The last thing state values we've processed
-    QHash<Thing*, double> m_powerBalanceTotalEnergyConsumedCache;
-    QHash<Thing*, double> m_powerBalanceTotalEnergyProducedCache;
+    QHash<Thing *, double> m_powerBalanceTotalEnergyConsumedCache;
+    QHash<Thing *, double> m_powerBalanceTotalEnergyProducedCache;
 
     // - The last thing state value we've read and processed
     // - The last entry in our internal counters we've processed and logged
-    // QHash<Thing*, Pair<thingStateValue, internalValue>>
-    QHash<Thing*, QPair<double, double>> m_thingsTotalEnergyConsumedCache;
-    QHash<Thing*, QPair<double, double>> m_thingsTotalEnergyProducedCache;
+    // QHash<Thing *, Pair<thingStateValue, internalValue>>
+    QHash<Thing *, QPair<double, double>> m_thingsTotalEnergyConsumedCache;
+    QHash<Thing *, QPair<double, double>> m_thingsTotalEnergyProducedCache;
 };
 
 #endif // ENERGYMANAGERIMPL_H

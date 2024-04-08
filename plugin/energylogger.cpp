@@ -1,6 +1,6 @@
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 *
-* Copyright 2013 - 2024, nymea GmbH
+* Copyright 2013 - 2025, nymea GmbH
 * Contact: contact@nymea.io
 *
 * This file is part of nymea.
@@ -43,7 +43,8 @@
 #include <QLoggingCategory>
 Q_DECLARE_LOGGING_CATEGORY(dcEnergyExperience)
 
-EnergyLogger::EnergyLogger(QObject *parent) : EnergyLogs(parent)
+EnergyLogger::EnergyLogger(QObject *parent)
+    : EnergyLogs(parent)
 {
     if (!initDB()) {
         qCCritical(dcEnergyExperience()) << "Unable to open energy log. Energy logs will not be available.";
@@ -152,7 +153,7 @@ PowerBalanceLogEntries EnergyLogger::powerBalanceLogs(SampleRate sampleRate, con
     }
 
     while (query.next()) {
-//        qCDebug(dcEnergyExperience()) << "Adding result";
+        //        qCDebug(dcEnergyExperience()) << "Adding result";
         result.append(queryResultToBalanceLogEntry(query.record()));
     }
     return result;
@@ -198,11 +199,11 @@ ThingPowerLogEntries EnergyLogger::thingPowerLogs(SampleRate sampleRate, const Q
 
     while (query.next()) {
         result.append(ThingPowerLogEntry(
-                          QDateTime::fromMSecsSinceEpoch(query.value("timestamp").toLongLong()),
-                          query.value("thingId").toUuid(),
-                          query.value("currentPower").toDouble(),
-                          query.value("totalConsumption").toDouble(),
-                          query.value("totalProduction").toDouble()));
+            QDateTime::fromMSecsSinceEpoch(query.value("timestamp").toLongLong()),
+            query.value("thingId").toUuid(),
+            query.value("currentPower").toDouble(),
+            query.value("totalConsumption").toDouble(),
+            query.value("totalProduction").toDouble()));
     }
     return result;
 
@@ -489,89 +490,110 @@ bool EnergyLogger::initDB()
 {
     m_db.close();
 
-    m_db = QSqlDatabase::addDatabase("QSQLITE", "energylogs");
+    m_db = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), "energylogs");
     QDir path = QDir(NymeaSettings::storagePath());
-    if (!path.exists()) {
+    if (!path.exists())
         path.mkpath(path.path());
-    }
+
     m_db.setDatabaseName(path.filePath("energylogs.sqlite"));
 
-    bool opened = m_db.open();
-    if (!opened) {
+    if (!m_db.isValid()) {
+        qCWarning(dcEnergyExperience()) << "The energy database is not valid" << m_db.databaseName();
+        return false;
+    }
+
+    qCDebug(dcEnergyExperience()) << "Opening energy database" << m_db.databaseName();
+    if (!m_db.open()) {
         qCWarning(dcEnergyExperience()) << "Cannot open energy log DB at" << m_db.databaseName() << m_db.lastError();
         return false;
     }
 
     if (!m_db.tables().contains("metadata")) {
         qCDebug(dcEnergyExperience()) << "No \"metadata\" table in database. Creating it.";
-        m_db.exec("CREATE TABLE metadata (version INT);");
-        m_db.exec("INSERT INTO metadata (version) VALUES (1);");
 
-        if (m_db.lastError().isValid()) {
-            qCWarning(dcEnergyExperience()) << "Error creating metadata table in energy log database. Driver error:" << m_db.lastError().driverText() << "Database error:" << m_db.lastError().databaseText();
+        QString queryString = "CREATE TABLE IF NOT EXISTS metadata (version INT);";
+        QSqlQuery createTableMetadataVersionQuery(queryString, m_db);
+
+        if (!createTableMetadataVersionQuery.exec()) {
+            qCWarning(dcEnergyExperience()) << "Error creating metadata table in energy log database. Query:" << queryString << createTableMetadataVersionQuery.lastError().text() << "Driver error:" << m_db.lastError().driverText() << "Database error:" << m_db.lastError().databaseText();
+            return false;
+        }
+
+        queryString = "INSERT INTO metadata (version) VALUES (1);";
+        QSqlQuery writeVersionQuery(queryString, m_db);
+        if (!writeVersionQuery.exec()) {
+            qCWarning(dcEnergyExperience()) << "Error writing metadata table in energy log database. Query:" << queryString << writeVersionQuery.lastError().text() << "Driver error:" << m_db.lastError().driverText() << "Database error:" << m_db.lastError().databaseText();
             return false;
         }
     }
 
     if (!m_db.tables().contains("powerBalance")) {
         qCDebug(dcEnergyExperience()) << "No \"powerBalance\" table in database. Creating it.";
-        m_db.exec("CREATE TABLE powerBalance "
-                  "("
-                  "timestamp BIGINT,"
-                  "sampleRate INT,"
-                  "consumption FLOAT,"
-                  "production FLOAT,"
-                  "acquisition FLOAT,"
-                  "storage FLOAT,"
-                  "totalConsumption FLOAT,"
-                  "totalProduction FLOAT,"
-                  "totalAcquisition FLOAT,"
-                  "totalReturn FLOAT"
-                  ");");
+        QString query("CREATE TABLE IF NOT EXISTS powerBalance "
+                      "("
+                      "timestamp BIGINT,"
+                      "sampleRate INT,"
+                      "consumption FLOAT,"
+                      "production FLOAT,"
+                      "acquisition FLOAT,"
+                      "storage FLOAT,"
+                      "totalConsumption FLOAT,"
+                      "totalProduction FLOAT,"
+                      "totalAcquisition FLOAT,"
+                      "totalReturn FLOAT"
+                      ");");
 
-        if (m_db.lastError().isValid()) {
-            qCWarning(dcEnergyExperience()) << "Error creating powerBalance table in energy log database. Driver error:" << m_db.lastError().driverText() << "Database error:" << m_db.lastError().databaseText();
+        QSqlQuery createTableQuery(query, m_db);
+        if (!createTableQuery.exec()) {
+            qCWarning(dcEnergyExperience()) << "Error creating powerBalance table in energy log database." << query << createTableQuery.lastError().text() << "Driver error:" << m_db.lastError().driverText() << "Database error:" << m_db.lastError().databaseText();
             return false;
         }
+
     }
-    m_db.exec("CREATE INDEX IF NOT EXISTS idx_powerBalance ON powerBalance(sampleRate, timestamp);");
-    if (m_db.lastError().isValid()) {
-        qCWarning(dcEnergyExperience()) << "Error creating powerBalance table index in energy log database. Driver error:" << m_db.lastError().driverText() << "Database error:" << m_db.lastError().databaseText();
+
+    QSqlQuery createPowerBalanceIndexQuery("CREATE INDEX IF NOT EXISTS idx_powerBalance ON powerBalance(sampleRate, timestamp);", m_db);
+    if (!createPowerBalanceIndexQuery.exec()) {
+        qCWarning(dcEnergyExperience()) << "Error creating powerBalance table index in energy log database. Query:" << createPowerBalanceIndexQuery.lastQuery() << createPowerBalanceIndexQuery.lastError().text() << "Driver error:" << m_db.lastError().driverText() << "Database error:" << m_db.lastError().databaseText();
         return false;
     }
 
     if (!m_db.tables().contains("thingPower")) {
         qCDebug(dcEnergyExperience()) << "No \"thingPower\" table in database. Creating it.";
-        m_db.exec("CREATE TABLE thingPower "
-                  "("
-                  "timestamp BIGINT,"
-                  "sampleRate INT,"
-                  "thingId VARCHAR(38),"
-                  "currentPower FLOAT,"
-                  "totalConsumption FLOAT,"
-                  "totalProduction FLOAT"
-                  ");");
-        if (m_db.lastError().isValid()) {
-            qCWarning(dcEnergyExperience()) << "Error creating thingPower table in energy log database. Driver error:" << m_db.lastError().driverText() << "Database error:" << m_db.lastError().databaseText();
+        QString query("CREATE TABLE IF NOT EXISTS thingPower "
+                      "("
+                      "timestamp BIGINT,"
+                      "sampleRate INT,"
+                      "thingId VARCHAR(38),"
+                      "currentPower FLOAT,"
+                      "totalConsumption FLOAT,"
+                      "totalProduction FLOAT"
+                      ");");
+
+        QSqlQuery createThingPowerTableQuery(query, m_db);
+        if (!createThingPowerTableQuery.exec()) {
+            qCWarning(dcEnergyExperience()) << "Error creating thingPower table in energy log database. Query:" << query << createThingPowerTableQuery.lastError().text() << "Driver error:" << m_db.lastError().driverText() << "Database error:" << m_db.lastError().databaseText();
             return false;
         }
     }
-    m_db.exec("CREATE INDEX IF NOT EXISTS idx_thingPower ON thingPower(thingId, sampleRate, timestamp);");
-    if (m_db.lastError().isValid()) {
-        qCWarning(dcEnergyExperience()) << "Error creating thingPower table index in energy log database. Driver error:" << m_db.lastError().driverText() << "Database error:" << m_db.lastError().databaseText();
+
+    QSqlQuery createThingPowerIndexQuery("CREATE INDEX IF NOT EXISTS idx_thingPower ON thingPower(thingId, sampleRate, timestamp);", m_db);
+    if (!createThingPowerIndexQuery.exec()) {
+        qCWarning(dcEnergyExperience()) << "Error creating thingPower table index in energy log database. Query:" << createThingPowerIndexQuery.lastQuery() << createThingPowerIndexQuery.lastError().text() << "Driver error:" << m_db.lastError().driverText() << "Database error:" << m_db.lastError().databaseText();
         return false;
     }
 
     if (!m_db.tables().contains("thingCache")) {
         qCDebug(dcEnergyExperience()) << "No \"thingCache\" table in database. Creating it.";
-        m_db.exec("CREATE TABLE thingCache "
-                  "("
-                  "thingId VARCHAR(38) PRIMARY KEY,"
-                  "totalEnergyConsumed FLOAT,"
-                  "totalEnergyProduced FLOAT"
-                  ");");
-        if (m_db.lastError().isValid()) {
-            qCWarning(dcEnergyExperience()) << "Error creating thingCache table in energy log database. Driver error:" << m_db.lastError().driverText() << "Database error:" << m_db.lastError().databaseText();
+        QString query("CREATE TABLE IF NOT EXISTS thingCache "
+                      "("
+                      "thingId VARCHAR(38) PRIMARY KEY,"
+                      "totalEnergyConsumed FLOAT,"
+                      "totalEnergyProduced FLOAT"
+                      ");");
+
+        QSqlQuery createThingCacheTableQuery(query, m_db);
+        if (!createThingCacheTableQuery.exec()) {
+            qCWarning(dcEnergyExperience()) << "Error creating thingCache table in energy log database. Query:" << query << createThingCacheTableQuery.lastError().text() << "Driver error:" << m_db.lastError().driverText() << "Database error:" << m_db.lastError().databaseText();
             return false;
         }
     }
@@ -672,8 +694,8 @@ void EnergyLogger::rectifySamples(SampleRate sampleRate, SampleRate baseSampleRa
         newestSample = oldestBaseSample;
     }
 
-//    qCDebug(dcEnergyExperience()) << "next sample after last in series:" << nextSampleTimestamp(sampleRate, newestSample).toString();
-//    qCDebug(dcEnergyExperience()) << "next scheduled sample:" << m_nextSamples.value(sampleRate).toString();
+    //    qCDebug(dcEnergyExperience()) << "next sample after last in series:" << nextSampleTimestamp(sampleRate, newestSample).toString();
+    //    qCDebug(dcEnergyExperience()) << "next scheduled sample:" << m_nextSamples.value(sampleRate).toString();
     if (!newestSample.isNull() && nextSampleTimestamp(sampleRate, newestSample) < m_nextSamples[sampleRate]) {
         // regularly sample one sample as there may be some valid samples in the base series
         QDateTime nextSample = nextSampleTimestamp(sampleRate, newestSample.addMSecs(1000));
@@ -713,8 +735,8 @@ void EnergyLogger::rectifySamples(SampleRate sampleRate, SampleRate baseSampleRa
             }
             newestSample = oldestBaseSample;
         }
-//        qCDebug(dcEnergyExperience()) << "T next sample after last in series:" << nextSampleTimestamp(sampleRate, newestSample).toString();
-//        qCDebug(dcEnergyExperience()) << "T next scheduled sample:" << m_nextSamples.value(sampleRate).toString();
+        //        qCDebug(dcEnergyExperience()) << "T next sample after last in series:" << nextSampleTimestamp(sampleRate, newestSample).toString();
+        //        qCDebug(dcEnergyExperience()) << "T next scheduled sample:" << m_nextSamples.value(sampleRate).toString();
         if (!newestSample.isNull() && nextSampleTimestamp(sampleRate, newestSample) < m_nextSamples[sampleRate]) {
             QDateTime nextSample = nextSampleTimestamp(sampleRate, newestSample.addMSecs(1000));
             sampleThingPower(thingId, sampleRate, baseSampleRate, nextSample);

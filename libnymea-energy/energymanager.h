@@ -1,6 +1,6 @@
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 *
-* Copyright 2013 - 2024, nymea GmbH
+* Copyright 2013 - 2025, nymea GmbH
 * Contact: contact@nymea.io
 *
 * This file is part of nymea.
@@ -64,7 +64,7 @@ public:
     virtual double totalAcquisition() const = 0;
     virtual double totalReturn() const = 0;
 
-    virtual EnergyLogs* logs() const = 0;
+    virtual EnergyLogs *logs() const = 0;
 
 signals:
     void rootMeterChanged();

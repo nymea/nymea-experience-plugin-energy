@@ -1,6 +1,6 @@
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 *
-* Copyright 2013 - 2024, nymea GmbH
+* Copyright 2013 - 2025, nymea GmbH
 * Contact: contact@nymea.io
 *
 * This file is part of nymea.
@@ -32,7 +32,7 @@
 #define ENERGYJSONHANDLER_H
 
 #include <QObject>
-#include "jsonrpc/jsonhandler.h"
+#include <jsonrpc/jsonhandler.h>
 
 class EnergyManager;
 
@@ -44,11 +44,11 @@ public:
 
     QString name() const override;
 
-    Q_INVOKABLE JsonReply* GetRootMeter(const QVariantMap &params);
-    Q_INVOKABLE JsonReply* SetRootMeter(const QVariantMap &params);
-    Q_INVOKABLE JsonReply* GetPowerBalance(const QVariantMap &params);
-    Q_INVOKABLE JsonReply* GetPowerBalanceLogs(const QVariantMap &params);
-    Q_INVOKABLE JsonReply* GetThingPowerLogs(const QVariantMap &params);
+    Q_INVOKABLE JsonReply *GetRootMeter(const QVariantMap &params);
+    Q_INVOKABLE JsonReply *SetRootMeter(const QVariantMap &params);
+    Q_INVOKABLE JsonReply *GetPowerBalance(const QVariantMap &params);
+    Q_INVOKABLE JsonReply *GetPowerBalanceLogs(const QVariantMap &params);
+    Q_INVOKABLE JsonReply *GetThingPowerLogs(const QVariantMap &params);
 
 signals:
     void RootMeterChanged(const QVariantMap &params);

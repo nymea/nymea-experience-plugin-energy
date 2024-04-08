@@ -7,7 +7,6 @@ NYMEA_ENERGY_VERSION_STRING = "0.0.1"
 CONFIG += link_pkgconfig
 PKGCONFIG += nymea
 
-
 HEADERS += \
     energylogs.h \
     energymanager.h \
@@ -37,4 +36,3 @@ QMAKE_PKGCONFIG_LIBDIR = $$target.path
 QMAKE_PKGCONFIG_VERSION = $$NYMEA_ENERGY_VERSION_STRING
 QMAKE_PKGCONFIG_FILE = nymea-energy
 QMAKE_PKGCONFIG_DESTDIR = pkgconfig
-

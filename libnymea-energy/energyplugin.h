@@ -1,6 +1,6 @@
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 *
-* Copyright 2013 - 2024, nymea GmbH
+* Copyright 2013 - 2025, nymea GmbH
 * Contact: contact@nymea.io
 *
 * This file is part of nymea.
@@ -48,9 +48,9 @@ public:
     virtual void init() = 0;
 
 protected:
-    EnergyManager* energyManager() const;
-    ThingManager* thingManager() const;
-    JsonRPCServer* jsonRpcServer() const;
+    EnergyManager *energyManager() const;
+    ThingManager *thingManager() const;
+    JsonRPCServer *jsonRpcServer() const;
 
 private:
     friend class ExperiencePluginEnergy;

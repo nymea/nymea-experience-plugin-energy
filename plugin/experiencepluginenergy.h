@@ -1,6 +1,6 @@
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 *
-* Copyright 2013 - 2024, nymea GmbH
+* Copyright 2013 - 2025, nymea GmbH
 * Contact: contact@nymea.io
 *
 * This file is part of nymea.
@@ -56,7 +56,7 @@ private:
     void loadPlugins();
     void loadEnergyPlugin(const QString &file);
 
-    QList<EnergyPlugin*> m_plugins;
+    QList<EnergyPlugin *> m_plugins;
 
     EnergyManagerImpl *m_energyManager = nullptr;
 };
