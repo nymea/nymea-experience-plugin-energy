@@ -150,8 +150,8 @@ void EnergyManagerImpl::watchThing(Thing *thing)
         m_powerBalanceTotalEnergyConsumedCache[thing] = stateEntry.totalConsumption();
         m_powerBalanceTotalEnergyProducedCache[thing] = stateEntry.totalProduction();
 
-        m_thingsTotalEnergyConsumedCache[thing] = qMakePair<double, double>(stateEntry.totalConsumption(), entry.totalConsumption());
-        m_thingsTotalEnergyProducedCache[thing] = qMakePair<double, double>(stateEntry.totalProduction(), entry.totalProduction());
+        m_thingsTotalEnergyConsumedCache[thing] = QPair<double, double>(stateEntry.totalConsumption(), entry.totalConsumption());
+        m_thingsTotalEnergyProducedCache[thing] = QPair<double, double>(stateEntry.totalProduction(), entry.totalProduction());
         qCDebug(dcEnergyExperience()) << "Loaded thing power totals for" << thing->name() << "Consumption:" << entry.totalConsumption() << "Production:" << entry.totalProduction() << "Last thing state consumption:" << stateEntry.totalConsumption() << "production:" << stateEntry.totalProduction();
 
         updateThingPower(thing);
@@ -285,7 +285,7 @@ void EnergyManagerImpl::updateThingPower(Thing *thing)
     }
     double consumptionDiff = newThingConsumptionState - oldThingConsumptionState;
     double newThingConsumptionInternal = oldThingConsumptionInternal + consumptionDiff;
-    m_thingsTotalEnergyConsumedCache[thing] = qMakePair<double, double>(newThingConsumptionState, newThingConsumptionInternal);
+    m_thingsTotalEnergyConsumedCache[thing] = QPair<double, double>(newThingConsumptionState, newThingConsumptionInternal);
 
 
     // Production
@@ -304,7 +304,7 @@ void EnergyManagerImpl::updateThingPower(Thing *thing)
     }
     double productionDiff = newThingProductionState - oldThingProductionState;
     double newThingProductionInternal = oldThingProductionInternal + productionDiff;
-    m_thingsTotalEnergyProducedCache[thing] = qMakePair<double, double>(newThingProductionState, newThingProductionInternal);
+    m_thingsTotalEnergyProducedCache[thing] = QPair<double, double>(newThingProductionState, newThingProductionInternal);
 
 
     // Write to log

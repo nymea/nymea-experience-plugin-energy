@@ -1,13 +1,13 @@
 TEMPLATE = lib
 TARGET = $$qtLibraryTarget(nymea_experiencepluginenergy)
 
-CONFIG += plugin link_pkgconfig c++11
+include(../config.pri)
+
+CONFIG += plugin link_pkgconfig
 PKGCONFIG += nymea
 
 QT -= gui
 QT += network sql
-
-include(../config.pri)
 
 INCLUDEPATH += $$top_srcdir/libnymea-energy
 LIBS += -L$$top_builddir/libnymea-energy -lnymea-energy
