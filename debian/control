@@ -1,8 +1,8 @@
 Source: nymea-experience-plugin-energy
 Section: utils
 Priority: optional
-Maintainer: Michael Zanetti <michael.zanetti@nymea.io>
-Standards-Version: 3.9.7
+Maintainer: nymea GmbH <developer@nymea.io>
+Standards-Version: 4.6.0
 Homepage: https://nymea.io
 Build-Depends: debhelper (>= 9.0.0),
                dpkg-dev (>= 1.16.1~),
@@ -10,6 +10,7 @@ Build-Depends: debhelper (>= 9.0.0),
                nymea-dev-tools:native,
                qt5-qmake,
                qtbase5-dev,
+
 
 Package: nymea-experience-plugin-energy
 Section: libs
@@ -21,6 +22,7 @@ Description: nymea experiece plugin for energy related use cases
  This nymea experience adds the support energy related use 
  caes to nymea.
 
+
 Package: libnymea-energy
 Section: libs
 Architecture: any
@@ -30,6 +32,7 @@ Depends: ${shlibs:Depends},
 Description: Library for nymea energy experience plugins
  This library is used by plugins loaded by the nymea
  energy experience.
+
 
 Package: libnymea-energy-dev
 Section: libdevel
