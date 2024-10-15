@@ -1,3 +1,10 @@
+nymea-experience-plugin-energy (1.11.0) jammy; urgency=medium
+
+  [ Simon Stürz ]
+  * Add missing debian copyright
+
+ -- jenkins <developer@nymea.io>  Tue, 15 Oct 2024 16:12:11 +0200
+
 nymea-experience-plugin-energy (1.9.4) jammy; urgency=medium
 
   [ Simon Stürz ]
