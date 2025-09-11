@@ -1,3 +1,10 @@
+nymea-experience-plugin-energy (1.12.0) jammy; urgency=medium
+
+  [ Simon Stürz ]
+  * Add Qt6 support
+
+ -- jenkins <developer@nymea.io>  Thu, 11 Sep 2025 14:26:31 +0200
+
 nymea-experience-plugin-energy (1.11.1) jammy; urgency=medium
 
 
