@@ -105,7 +105,6 @@ QStringList ExperiencePluginEnergy::pluginSearchDirs() const
             searchDirs << libraryPath.replace("qt6", "nymea").replace("plugins", "energy");
         }
 #endif
-
         searchDirs << QDir(QCoreApplication::applicationDirPath() + "/../lib/nymea/energy").absolutePath();
         searchDirs << QDir(QCoreApplication::applicationDirPath() + "/../energy/").absolutePath();
         searchDirs << QDir(QCoreApplication::applicationDirPath() + "/../../../energy/").absolutePath();
