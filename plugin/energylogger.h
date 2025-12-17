@@ -35,12 +35,15 @@
 #include <QSqlResult>
 #include <QTimer>
 #include <QMap>
+#include <QSet>
+#include <QThread>
 
 class EnergyLogger : public EnergyLogs
 {
     Q_OBJECT
 public:
     explicit EnergyLogger(QObject *parent = nullptr);
+    ~EnergyLogger() override;
 
     void logPowerBalance(double consumption, double production, double acquisition, double storage, double totalConsumption, double totalProduction, double totalAcquisition, double totalReturn);
     void logThingPower(const ThingId &thingId, double currentPower, double totalConsumption, double totalProduction);
@@ -89,6 +92,31 @@ private:
     ThingPowerLogEntry queryResultToThingPowerLogEntry(const QSqlRecord &record) const;
 
 private:
+    struct PendingPowerBalanceSample {
+        QDateTime timestamp;
+        SampleRate sampleRate = SampleRateAny;
+        double consumption = 0;
+        double production = 0;
+        double acquisition = 0;
+        double storage = 0;
+        double totalConsumption = 0;
+        double totalProduction = 0;
+        double totalAcquisition = 0;
+        double totalReturn = 0;
+    };
+
+    struct PendingThingPowerSample {
+        QDateTime timestamp;
+        SampleRate sampleRate = SampleRateAny;
+        ThingId thingId;
+        double currentPower = 0;
+        double totalConsumption = 0;
+        double totalProduction = 0;
+    };
+
+    void startDbMaintenance(const QString &reason, const QDateTime &fillMinuteSamplesUntil = QDateTime());
+    void flushPendingDbWrites();
+
     struct SampleConfig {
         SampleRate baseSampleRate;
         uint maxSamples = 0;
@@ -101,9 +129,17 @@ private:
     QHash<SampleRate, QDateTime> m_nextSamples;
 
     QSqlDatabase m_db;
+    QString m_dbFilePath;
 
     int m_maxMinuteSamples = 0;
     QMap<SampleRate, SampleConfig> m_configs;
+
+    bool m_dbMaintenanceRunning = false;
+    QThread *m_dbMaintenanceThread = nullptr;
+    QList<PendingPowerBalanceSample> m_pendingPowerBalanceSamples;
+    QList<PendingThingPowerSample> m_pendingThingPowerSamples;
+    QHash<ThingId, QPair<double, double>> m_pendingThingCacheEntries;
+    QSet<ThingId> m_pendingThingLogRemovals;
 };
 
 #endif // ENERGYLOGGER_H
