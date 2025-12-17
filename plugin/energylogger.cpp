@@ -101,7 +101,7 @@ void EnergyLogger::logPowerBalance(double consumption, double production, double
     // Add everything to livelog, keep that for one day, in memory only
     m_balanceLiveLog.prepend(entry);
     while (m_balanceLiveLog.count() > 1 && m_balanceLiveLog.last().timestamp().addDays(1) < QDateTime::currentDateTime()) {
-        qCDebug(dcEnergyExperience) << "Discarding livelog entry from" << m_balanceLiveLog.last().timestamp().toString();
+        qCDebug(dcEnergyExperience()) << "Discarding livelog entry from" << m_balanceLiveLog.last().timestamp().toString();
         m_balanceLiveLog.removeLast();
     }
 }
@@ -134,6 +134,7 @@ PowerBalanceLogEntries EnergyLogger::powerBalanceLogs(SampleRate sampleRate, con
         queryString += " AND timestamp <= ?";
         bindValues << to.toMSecsSinceEpoch();
     }
+    queryString += " ORDER BY timestamp ASC";
     query.prepare(queryString);
     foreach (const QVariant &bindValue, bindValues) {
         query.addBindValue(bindValue);
@@ -181,13 +182,14 @@ ThingPowerLogEntries EnergyLogger::thingPowerLogs(SampleRate sampleRate, const Q
         queryString += " AND timestamp <= ?";
         bindValues << to.toMSecsSinceEpoch();
     }
+    queryString += " ORDER BY timestamp ASC";
     query.prepare(queryString);
     foreach (const QVariant &bindValue, bindValues) {
         query.addBindValue(bindValue);
     }
     query.exec();
     if (query.lastError().isValid()) {
-        qCWarning(dcEnergyExperience()) << "Error fetching power balance logs:" << query.lastError() << query.executedQuery();
+        qCWarning(dcEnergyExperience()) << "Error fetching thing power logs:" << query.lastError() << query.executedQuery();
         return result;
     }
 
@@ -210,20 +212,24 @@ PowerBalanceLogEntry EnergyLogger::latestLogEntry(SampleRate sampleRate)
             return m_balanceLiveLog.first();
         }
     }
+
     QSqlQuery query(m_db);
-    QString queryString = "SELECT MAX(timestamp) as timestamp, consumption, production, acquisition, storage, totalConsumption, totalProduction, totalAcquisition, totalReturn FROM powerBalance";
+    QString queryString = "SELECT * FROM powerBalance";
     QVariantList bindValues;
     if (sampleRate != SampleRateAny) {
         queryString += " WHERE sampleRate = ?";
         bindValues.append(sampleRate);
     }
-    queryString += ";";
+    queryString += " ORDER BY timestamp DESC";
+    if (sampleRate == SampleRateAny) {
+        queryString += ", sampleRate ASC";
+    }
+    queryString += " LIMIT 1;";
     query.prepare(queryString);
     foreach (const QVariant &value, bindValues) {
         query.addBindValue(value);
     }
-    query.exec();
-    if (query.lastError().isValid()) {
+    if (!query.exec()) {
         qCWarning(dcEnergyExperience()) << "Error obtaining latest log entry from DB:" << query.lastError() << query.executedQuery();
         return PowerBalanceLogEntry();
     }
@@ -243,15 +249,28 @@ ThingPowerLogEntry EnergyLogger::latestLogEntry(SampleRate sampleRate, const Thi
     }
 
     QSqlQuery query(m_db);
-    query.prepare("SELECT MAX(timestamp) as timestamp, currentPower, totalConsumption, totalProduction from thingPower WHERE sampleRate = ? AND thingId = ?;");
-    query.addBindValue(sampleRate);
-    query.addBindValue(thingId);
+    QString queryString = "SELECT * FROM thingPower WHERE thingId = ?";
+    QVariantList bindValues;
+    bindValues << thingId;
+    if (sampleRate != SampleRateAny) {
+        queryString += " AND sampleRate = ?";
+        bindValues << sampleRate;
+    }
+    queryString += " ORDER BY timestamp DESC";
+    if (sampleRate == SampleRateAny) {
+        queryString += ", sampleRate ASC";
+    }
+    queryString += " LIMIT 1;";
+    query.prepare(queryString);
+    foreach (const QVariant &bindValue, bindValues) {
+        query.addBindValue(bindValue);
+    }
     if (!query.exec()) {
         qCWarning(dcEnergyExperience()) << "Error fetching latest thing log entry from DB:" << query.lastError() << query.executedQuery();
         return ThingPowerLogEntry();
     }
     if (!query.next()) {
-        qCDebug(dcEnergyExperience()) << "No thing power log entry in DB for sample rate:" << sampleRate;
+        qCDebug(dcEnergyExperience()) << "No thing power log entry in DB for sample rate:" << sampleRate << "thingId:" << thingId;
         return ThingPowerLogEntry();
     }
     return queryResultToThingPowerLogEntry(query.record());
@@ -268,6 +287,14 @@ void EnergyLogger::removeThingLogs(const ThingId &thingId)
     query.exec();
     if (query.lastError().isValid()) {
         qCWarning(dcEnergyExperience()) << "Error removing thing energy logs for thing id" << thingId << query.lastError() << query.executedQuery();
+    }
+
+    query = QSqlQuery(m_db);
+    query.prepare("DELETE FROM thingCache WHERE thingId = ?;");
+    query.addBindValue(thingId);
+    query.exec();
+    if (query.lastError().isValid()) {
+        qCWarning(dcEnergyExperience()) << "Error removing thing cache entry for thing id" << thingId << query.lastError() << query.executedQuery();
     }
 }
 
@@ -819,7 +846,7 @@ bool EnergyLogger::samplePowerBalance(SampleRate sampleRate, SampleRate baseSamp
     double totalReturn = 0;
 
     QSqlQuery query(m_db);
-    query.prepare("SELECT * FROM powerBalance WHERE sampleRate = ? AND timestamp > ? AND timestamp <= ?;");
+    query.prepare("SELECT * FROM powerBalance WHERE sampleRate = ? AND timestamp > ? AND timestamp <= ? ORDER BY timestamp ASC;");
     query.addBindValue(baseSampleRate);
     query.addBindValue(sampleStart.toMSecsSinceEpoch());
     query.addBindValue(sampleEnd.toMSecsSinceEpoch());
@@ -855,7 +882,7 @@ bool EnergyLogger::samplePowerBalance(SampleRate sampleRate, SampleRate baseSamp
         // to at least copy the totals from where we left off.
 
         query = QSqlQuery(m_db);
-        query.prepare("SELECT MAX(timestamp), consumption, production, acquisition, storage, totalConsumption, totalProduction, totalAcquisition, totalReturn FROM powerBalance WHERE sampleRate = ?;");
+        query.prepare("SELECT * FROM powerBalance WHERE sampleRate = ? ORDER BY timestamp DESC LIMIT 1;");
         query.addBindValue(baseSampleRate);
         query.exec();
         if (query.lastError().isValid()) {
@@ -919,7 +946,7 @@ bool EnergyLogger::sampleThingPower(const ThingId &thingId, SampleRate sampleRat
     double totalProduction = 0;
 
     QSqlQuery query(m_db);
-    query.prepare("SELECT * FROM thingPower WHERE thingId = ? AND sampleRate = ? AND timestamp > ? AND timestamp <= ?;");
+    query.prepare("SELECT * FROM thingPower WHERE thingId = ? AND sampleRate = ? AND timestamp > ? AND timestamp <= ? ORDER BY timestamp ASC;");
     query.addBindValue(thingId);
     query.addBindValue(baseSampleRate);
     query.addBindValue(sampleStart.toMSecsSinceEpoch());
@@ -951,7 +978,7 @@ bool EnergyLogger::sampleThingPower(const ThingId &thingId, SampleRate sampleRat
         // to at least copy the totals from where we left off.
 
         query = QSqlQuery(m_db);
-        query.prepare("SELECT MAX(timestamp), currentPower, totalConsumption, totalProduction FROM thingPower WHERE thingId = ? AND sampleRate = ?;");
+        query.prepare("SELECT * FROM thingPower WHERE thingId = ? AND sampleRate = ? ORDER BY timestamp DESC LIMIT 1;");
         query.addBindValue(thingId);
         query.addBindValue(baseSampleRate);
         query.exec();

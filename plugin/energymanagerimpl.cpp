@@ -150,6 +150,19 @@ void EnergyManagerImpl::watchThing(Thing *thing)
 
     qCDebug(dcEnergyExperience()) << "Watching thing:" << thing->name();
 
+    // Make sure we don't keep stale pointers in our caches when a thing goes away.
+    connect(thing, &QObject::destroyed, this, [this, thing](){
+        m_powerBalanceTotalEnergyConsumedCache.remove(thing);
+        m_powerBalanceTotalEnergyProducedCache.remove(thing);
+        m_thingsTotalEnergyConsumedCache.remove(thing);
+        m_thingsTotalEnergyProducedCache.remove(thing);
+
+        if (m_rootMeter == thing) {
+            m_rootMeter = nullptr;
+            emit rootMeterChanged();
+        }
+    });
+
     // React on things that require us updating the power balance
     if (thing->thingClass().interfaces().contains("energymeter")
             || thing->thingClass().interfaces().contains("smartmeterproducer")
@@ -299,7 +312,7 @@ void EnergyManagerImpl::updateThingPower(Thing *thing)
     double newThingConsumptionState = thing->stateValue("totalEnergyConsumed").toDouble();
     // For the very first cycle (oldConsumption is 0) we'll sync up on the meter, without actually adding it to our diff
     if (oldThingConsumptionState == 0 && newThingConsumptionState != 0) {
-        qInfo(dcEnergyExperience()) << "Don't have a consumption counter for" << thing->name() << "Synching internal counters to initial value:" << newThingConsumptionState;
+        qCInfo(dcEnergyExperience()) << "Don't have a consumption counter for" << thing->name() << "Synching internal counters to initial value:" << newThingConsumptionState;
         oldThingConsumptionState = newThingConsumptionState;
     }
     // If the thing's meter has been reset in the meantime (newConsumption < oldConsumption) we'll sync down, taking the whole diff from 0 to new value
@@ -318,7 +331,7 @@ void EnergyManagerImpl::updateThingPower(Thing *thing)
     double newThingProductionState = thing->stateValue("totalEnergyProduced").toDouble();
     // For the very first cycle (oldProductino is 0) we'll sync up on the meter, without actually adding it to our diff
     if (oldThingProductionState == 0 && newThingProductionState != 0) {
-        qInfo(dcEnergyExperience()) << "Don't have a production counter for" << thing->name() << "Synching internal counter to initial value:" << newThingProductionState;
+        qCInfo(dcEnergyExperience()) << "Don't have a production counter for" << thing->name() << "Synching internal counter to initial value:" << newThingProductionState;
         oldThingProductionState = newThingProductionState;
     }
     // If the thing's meter has been reset in the meantime (newProduction < oldProduction) we'll sync down, taking the whole diff from 0 to new value
@@ -346,4 +359,3 @@ void EnergyManagerImpl::logDumpConsumers()
         qCDebug(dcEnergyExperience()).nospace().noquote() << consumer->name() << ": " << (consumer->stateValue("currentPower").toDouble() / 230) << "A (" << consumer->stateValue("currentPower").toDouble() << "W)";
     }
 }
-
