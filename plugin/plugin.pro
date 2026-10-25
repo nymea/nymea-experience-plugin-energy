@@ -15,6 +15,7 @@ LIBS += -L$$top_builddir/libnymea-energy -lnymea-energy
 HEADERS += experiencepluginenergy.h \
     energyjsonhandler.h \
     energylogger.h \
+    energysampletimestamps.h \
     energymanagerimpl.h
 
 SOURCES += experiencepluginenergy.cpp \

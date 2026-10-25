@@ -23,6 +23,7 @@
 * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 #include "energylogger.h"
+#include "energysampletimestamps.h"
 
 #include <nymeasettings.h>
 
@@ -59,53 +60,6 @@ struct ThingTotals {
     double totalConsumption = 0;
     double totalProduction = 0;
 };
-
-QDateTime maintenanceNextSampleTimestamp(EnergyLogs::SampleRate sampleRate, const QDateTime &dateTime)
-{
-    QTime time = dateTime.time();
-    QDate date = dateTime.date();
-    QDateTime next;
-    switch (sampleRate) {
-    case EnergyLogs::SampleRateAny:
-        return QDateTime();
-    case EnergyLogs::SampleRate1Min:
-        time.setHMS(time.hour(), time.minute(), 0);
-        next = QDateTime(date, time).addMSecs(60 * 1000);
-        break;
-    case EnergyLogs::SampleRate15Mins:
-        time.setHMS(time.hour(), time.minute() - (time.minute() % 15), 0);
-        next = QDateTime(date, time).addMSecs(15 * 60 * 1000);
-        break;
-    case EnergyLogs::SampleRate1Hour:
-        time.setHMS(time.hour(), 0, 0);
-        next = QDateTime(date, time).addMSecs(60 * 60 * 1000);
-        break;
-    case EnergyLogs::SampleRate3Hours:
-        time.setHMS(time.hour() - (time.hour() % 3), 0, 0);
-        next = QDateTime(date, time).addMSecs(3 * 60 * 60 * 1000);
-        if (next.time().hour() == 2) {
-            next = next.addMSecs(60 * 60 * 1000);
-        }
-        break;
-    case EnergyLogs::SampleRate1Day:
-        next = QDateTime(date, QTime()).addDays(1);
-        break;
-    case EnergyLogs::SampleRate1Week:
-        date = date.addDays(-date.dayOfWeek() + 1);
-        next = QDateTime(date, QTime()).addDays(7);
-        break;
-    case EnergyLogs::SampleRate1Month:
-        date = date.addDays(-date.day() + 1);
-        next = QDateTime(date, QTime()).addMonths(1);
-        break;
-    case EnergyLogs::SampleRate1Year:
-        date.setDate(date.year(), 1, 1);
-        next = QDateTime(date, QTime()).addYears(1);
-        break;
-    }
-
-    return next;
-}
 
 QDateTime maintenanceCalculateSampleStart(const QDateTime &sampleEnd, EnergyLogs::SampleRate sampleRate, int sampleCount = 1)
 {
@@ -404,8 +358,13 @@ void maintenanceRectifySamples(QSqlDatabase &db, EnergyLogs::SampleRate sampleRa
         newestSample = oldestBaseSample;
     }
 
-    if (!newestSample.isNull() && maintenanceNextSampleTimestamp(sampleRate, newestSample) < nextScheduledSample) {
-        QDateTime nextSample = maintenanceNextSampleTimestamp(sampleRate, newestSample.addMSecs(1000));
+    if (!newestSample.isNull() && EnergySampleTimestamps::nextSampleTimestamp(sampleRate, newestSample) < nextScheduledSample) {
+        QDateTime nextSample = EnergySampleTimestamps::nextSampleTimestamp(sampleRate, newestSample.addMSecs(1000));
+        if (!nextSample.isValid() || nextSample <= newestSample) {
+            qCWarning(dcEnergyExperience()) << "Aborting energy sample repair: timestamp did not advance"
+                                            << sampleRate << newestSample << nextSample;
+            return;
+        }
         maintenanceSamplePowerBalance(db, sampleRate, baseSampleRate, nextSample);
         newestSample = nextSample;
     }
@@ -417,12 +376,18 @@ void maintenanceRectifySamples(QSqlDatabase &db, EnergyLogs::SampleRate sampleRa
     }
 
     db.transaction();
-    while (!newestSample.isNull() && maintenanceNextSampleTimestamp(sampleRate, newestSample) < nextScheduledSample) {
+    while (!newestSample.isNull() && EnergySampleTimestamps::nextSampleTimestamp(sampleRate, newestSample) < nextScheduledSample) {
         if (QThread::currentThread()->isInterruptionRequested()) {
             db.rollback();
             return;
         }
-        QDateTime nextSample = maintenanceNextSampleTimestamp(sampleRate, newestSample.addMSecs(1000));
+        QDateTime nextSample = EnergySampleTimestamps::nextSampleTimestamp(sampleRate, newestSample.addMSecs(1000));
+        if (!nextSample.isValid() || nextSample <= newestSample) {
+            qCWarning(dcEnergyExperience()) << "Aborting energy sample repair: timestamp did not advance"
+                                            << sampleRate << newestSample << nextSample;
+            db.rollback();
+            return;
+        }
         maintenanceInsertPowerBalance(db, nextSample, sampleRate, 0, 0, 0, 0, latest.totalConsumption, latest.totalProduction, latest.totalAcquisition, latest.totalReturn);
         newestSample = nextSample;
     }
@@ -443,8 +408,13 @@ void maintenanceRectifySamples(QSqlDatabase &db, EnergyLogs::SampleRate sampleRa
             newestSample = oldestBaseSample;
         }
 
-        if (!newestSample.isNull() && maintenanceNextSampleTimestamp(sampleRate, newestSample) < nextScheduledSample) {
-            QDateTime nextSample = maintenanceNextSampleTimestamp(sampleRate, newestSample.addMSecs(1000));
+        if (!newestSample.isNull() && EnergySampleTimestamps::nextSampleTimestamp(sampleRate, newestSample) < nextScheduledSample) {
+            QDateTime nextSample = EnergySampleTimestamps::nextSampleTimestamp(sampleRate, newestSample.addMSecs(1000));
+            if (!nextSample.isValid() || nextSample <= newestSample) {
+                qCWarning(dcEnergyExperience()) << "Aborting energy sample repair: timestamp did not advance"
+                                                << sampleRate << newestSample << nextSample;
+                return;
+            }
             maintenanceSampleThingPower(db, thingId, sampleRate, baseSampleRate, nextSample);
             newestSample = nextSample;
         }
@@ -454,12 +424,18 @@ void maintenanceRectifySamples(QSqlDatabase &db, EnergyLogs::SampleRate sampleRa
         newestSample = qMax(newestSample, maintenanceCalculateSampleStart(nextScheduledSample, sampleRate, (int)maxSamples));
 
         db.transaction();
-        while (!newestSample.isNull() && maintenanceNextSampleTimestamp(sampleRate, newestSample) < nextScheduledSample) {
+        while (!newestSample.isNull() && EnergySampleTimestamps::nextSampleTimestamp(sampleRate, newestSample) < nextScheduledSample) {
             if (QThread::currentThread()->isInterruptionRequested()) {
                 db.rollback();
                 return;
             }
-            QDateTime nextSample = maintenanceNextSampleTimestamp(sampleRate, newestSample.addMSecs(1000));
+            QDateTime nextSample = EnergySampleTimestamps::nextSampleTimestamp(sampleRate, newestSample.addMSecs(1000));
+            if (!nextSample.isValid() || nextSample <= newestSample) {
+                qCWarning(dcEnergyExperience()) << "Aborting energy sample repair: timestamp did not advance"
+                                                << sampleRate << newestSample << nextSample;
+                db.rollback();
+                return;
+            }
             maintenanceInsertThingPower(db, nextSample, sampleRate, thingId, 0, latest.totalConsumption, latest.totalProduction);
             newestSample = nextSample;
         }
@@ -693,7 +669,7 @@ void EnergyLogger::startDbMaintenance(const QString &reason, const QDateTime &fi
                     }
                     QDateTime nextScheduledSample = nextSamples.value(cfg.sampleRate);
                     if (!nextScheduledSample.isValid()) {
-                        nextScheduledSample = maintenanceNextSampleTimestamp(cfg.sampleRate, QDateTime::currentDateTime());
+                        nextScheduledSample = EnergySampleTimestamps::nextSampleTimestamp(cfg.sampleRate, QDateTime::currentDateTime());
                     }
                     maintenanceRectifySamples(db, cfg.sampleRate, cfg.baseSampleRate, cfg.maxSamples, nextScheduledSample, thingIds);
                 }
@@ -1466,6 +1442,11 @@ void EnergyLogger::rectifySamples(SampleRate sampleRate, SampleRate baseSampleRa
     if (!newestSample.isNull() && nextSampleTimestamp(sampleRate, newestSample) < m_nextSamples[sampleRate]) {
         // regularly sample one sample as there may be some valid samples in the base series
         QDateTime nextSample = nextSampleTimestamp(sampleRate, newestSample.addMSecs(1000));
+        if (!nextSample.isValid() || nextSample <= newestSample) {
+            qCWarning(dcEnergyExperience()) << "Aborting energy sample repair: timestamp did not advance"
+                                            << sampleRate << newestSample << nextSample;
+            return;
+        }
         samplePowerBalance(sampleRate, baseSampleRate, nextSample);
         newestSample = nextSample;
     }
@@ -1480,6 +1461,12 @@ void EnergyLogger::rectifySamples(SampleRate sampleRate, SampleRate baseSampleRa
     int count = 0;
     while (!newestSample.isNull() && nextSampleTimestamp(sampleRate, newestSample) < m_nextSamples[sampleRate]) {
         QDateTime nextSample = nextSampleTimestamp(sampleRate, newestSample.addMSecs(1000));
+        if (!nextSample.isValid() || nextSample <= newestSample) {
+            qCWarning(dcEnergyExperience()) << "Aborting energy sample repair: timestamp did not advance"
+                                            << sampleRate << newestSample << nextSample;
+            m_db.rollback();
+            return;
+        }
         insertPowerBalance(nextSample, sampleRate, 0, 0, 0, 0, latest.totalConsumption(), latest.totalProduction(), latest.totalAcquisition(), latest.totalReturn());
         newestSample = nextSample;
         count++;
@@ -1506,6 +1493,11 @@ void EnergyLogger::rectifySamples(SampleRate sampleRate, SampleRate baseSampleRa
         //        qCDebug(dcEnergyExperience()) << "T next scheduled sample:" << m_nextSamples.value(sampleRate).toString();
         if (!newestSample.isNull() && nextSampleTimestamp(sampleRate, newestSample) < m_nextSamples[sampleRate]) {
             QDateTime nextSample = nextSampleTimestamp(sampleRate, newestSample.addMSecs(1000));
+            if (!nextSample.isValid() || nextSample <= newestSample) {
+                qCWarning(dcEnergyExperience()) << "Aborting energy sample repair: timestamp did not advance"
+                                                << sampleRate << newestSample << nextSample;
+                return;
+            }
             sampleThingPower(thingId, sampleRate, baseSampleRate, nextSample);
             newestSample = nextSample;
         }
@@ -1518,6 +1510,12 @@ void EnergyLogger::rectifySamples(SampleRate sampleRate, SampleRate baseSampleRa
         int count = 0;
         while (!newestSample.isNull() && nextSampleTimestamp(sampleRate, newestSample) < m_nextSamples[sampleRate]) {
             QDateTime nextSample = nextSampleTimestamp(sampleRate, newestSample.addMSecs(1000));
+            if (!nextSample.isValid() || nextSample <= newestSample) {
+                qCWarning(dcEnergyExperience()) << "Aborting energy sample repair: timestamp did not advance"
+                                                << sampleRate << newestSample << nextSample;
+                m_db.rollback();
+                return;
+            }
             insertThingPower(nextSample, sampleRate, thingId, 0, latest.totalConsumption(), latest.totalProduction());
             newestSample = nextSample;
             count++;
@@ -1529,51 +1527,10 @@ void EnergyLogger::rectifySamples(SampleRate sampleRate, SampleRate baseSampleRa
 
 QDateTime EnergyLogger::nextSampleTimestamp(SampleRate sampleRate, const QDateTime &dateTime)
 {
-    QTime time = dateTime.time();
-    QDate date = dateTime.date();
-    QDateTime next;
-    switch (sampleRate) {
-    case SampleRateAny:
+    if (sampleRate == SampleRateAny) {
         qCWarning(dcEnergyExperience()) << "Cannot calculate next sample timestamp without a sample rate";
-        return QDateTime();
-    case SampleRate1Min:
-        time.setHMS(time.hour(), time.minute(), 0);
-        next = QDateTime(date, time).addMSecs(60 * 1000);
-        break;
-    case SampleRate15Mins:
-        time.setHMS(time.hour(), time.minute() - (time.minute() % 15), 0);
-        next = QDateTime(date, time).addMSecs(15 * 60 * 1000);
-        break;
-    case SampleRate1Hour:
-        time.setHMS(time.hour(), 0, 0);
-        next = QDateTime(date, time).addMSecs(60 * 60 * 1000);
-        break;
-    case SampleRate3Hours:
-        time.setHMS(time.hour() - (time.hour() % 3), 0, 0);
-        next = QDateTime(date, time).addMSecs(3 * 60 * 60 * 1000);
-        if (next.time().hour() == 2) {
-            qCDebug(dcEnergyExperience()) << "DST switch detected!";
-            next = next.addMSecs(60 * 60 * 1000);
-        }
-        break;
-    case SampleRate1Day:
-        next = QDateTime(date, QTime()).addDays(1);
-        break;
-    case SampleRate1Week:
-        date = date.addDays(-date.dayOfWeek() + 1);
-        next = QDateTime(date, QTime()).addDays(7);
-        break;
-    case SampleRate1Month:
-        date = date.addDays(-date.day() + 1);
-        next = QDateTime(date, QTime()).addMonths(1);
-        break;
-    case SampleRate1Year:
-        date.setDate(date.year(), 1, 1);
-        next = QDateTime(date, QTime()).addYears(1);
-        break;
     }
-
-    return next;
+    return EnergySampleTimestamps::nextSampleTimestamp(sampleRate, dateTime);
 }
 
 bool EnergyLogger::samplePowerBalance(SampleRate sampleRate, SampleRate baseSampleRate, const QDateTime &sampleEnd)
