@@ -40,6 +40,18 @@ qmake6 ..
 make -j
 ```
 
+## Tests
+
+Build the timestamp, database migration, and logger regression tests separately:
+
+```sh
+mkdir -p build/tests
+cd build/tests
+qmake6 ../../tests/tests.pro
+make -j
+make check
+```
+
 ## Install
 
 ```sh
@@ -60,6 +72,29 @@ Depending on your prefix, installation may require elevated permissions.
 - Plugin discovery paths can be overridden using `NYMEA_ENERGY_PLUGINS_PATH` (replace defaults) and `NYMEA_ENERGY_PLUGINS_EXTRA_PATH` (prepend extra search directories). Both accept a colon-separated list of paths.
 - Runtime state is persisted in `energy.conf` under `NymeaSettings::settingsPath()`.
 - Logging uses the `EnergyExperience` category (e.g. enable debug logs via `QT_LOGGING_RULES="EnergyExperience.debug=true"`).
+
+### Energy database cleanup
+
+On first database open after upgrading, a one-time transactional migration removes
+duplicate sample keys while keeping the earliest row and creates unique indexes
+to prevent recurrence. Initialization fails if cleanup fails. Normal retention
+remains unchanged. Startup cleanup can take time for large databases;
+there is no automatic vacuum.
+
+Deleting rows frees pages for reuse but does **not** shrink the SQLite file. To
+optionally reclaim disk space manually, first start `nymead` with the upgraded
+plugin and let duplicate cleanup finish successfully, then stop `nymead` again.
+`VACUUM` alone does not remove duplicates. Back up and compact the database using
+the actual paths:
+
+```sh
+sqlite3 /path/energylogs.sqlite '.backup /path/energylogs.backup.sqlite'
+sqlite3 /path/energylogs.sqlite 'VACUUM;'
+```
+
+Proceed with `VACUUM` only after the backup succeeds. Ensure sufficient free disk
+space for the backup and VACUUM's temporary files, and keep `nymead` stopped until
+compaction finishes, then restart it.
 
 ## Translations
 

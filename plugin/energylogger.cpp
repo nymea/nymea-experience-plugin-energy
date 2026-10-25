@@ -24,6 +24,7 @@
 
 #include "energylogger.h"
 #include "energysampletimestamps.h"
+#include "energylogdatabase.h"
 
 #include <nymeasettings.h>
 
@@ -193,7 +194,7 @@ bool maintenanceInsertPowerBalance(QSqlDatabase &db, const QDateTime &timestamp,
                                   double totalConsumption, double totalProduction, double totalAcquisition, double totalReturn)
 {
     QSqlQuery query(db);
-    query.prepare(QStringLiteral("INSERT INTO powerBalance (timestamp, sampleRate, consumption, production, acquisition, storage, totalConsumption, totalProduction, totalAcquisition, totalReturn) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"));
+    query.prepare(QStringLiteral("INSERT OR IGNORE INTO powerBalance (timestamp, sampleRate, consumption, production, acquisition, storage, totalConsumption, totalProduction, totalAcquisition, totalReturn) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"));
     query.addBindValue(timestamp.toMSecsSinceEpoch());
     query.addBindValue(sampleRate);
     query.addBindValue(consumption);
@@ -215,7 +216,7 @@ bool maintenanceInsertThingPower(QSqlDatabase &db, const QDateTime &timestamp, E
                                  double currentPower, double totalConsumption, double totalProduction)
 {
     QSqlQuery query(db);
-    query.prepare(QStringLiteral("INSERT INTO thingPower (timestamp, sampleRate, thingId, currentPower, totalConsumption, totalProduction) values (?, ?, ?, ?, ?, ?);"));
+    query.prepare(QStringLiteral("INSERT OR IGNORE INTO thingPower (timestamp, sampleRate, thingId, currentPower, totalConsumption, totalProduction) values (?, ?, ?, ?, ?, ?);"));
     query.addBindValue(timestamp.toMSecsSinceEpoch());
     query.addBindValue(sampleRate);
     query.addBindValue(thingId);
@@ -540,6 +541,7 @@ EnergyLogger::EnergyLogger(QObject *parent)
     : EnergyLogs(parent)
 {
     if (!initDB()) {
+        m_db.close();
         qCCritical(dcEnergyExperience()) << "Unable to open energy log. Energy logs will not be available.";
         return;
     }
@@ -1285,12 +1287,6 @@ bool EnergyLogger::initDB()
 
     }
 
-    QSqlQuery createPowerBalanceIndexQuery("CREATE INDEX IF NOT EXISTS idx_powerBalance ON powerBalance(sampleRate, timestamp);", m_db);
-    if (!createPowerBalanceIndexQuery.exec()) {
-        qCWarning(dcEnergyExperience()) << "Error creating powerBalance table index in energy log database. Query:" << createPowerBalanceIndexQuery.lastQuery() << createPowerBalanceIndexQuery.lastError().text() << "Driver error:" << m_db.lastError().driverText() << "Database error:" << m_db.lastError().databaseText();
-        return false;
-    }
-
     if (!m_db.tables().contains("thingPower")) {
         qCDebug(dcEnergyExperience()) << "No \"thingPower\" table in database. Creating it.";
         QString query("CREATE TABLE IF NOT EXISTS thingPower "
@@ -1310,12 +1306,6 @@ bool EnergyLogger::initDB()
         }
     }
 
-    QSqlQuery createThingPowerIndexQuery("CREATE INDEX IF NOT EXISTS idx_thingPower ON thingPower(thingId, sampleRate, timestamp);", m_db);
-    if (!createThingPowerIndexQuery.exec()) {
-        qCWarning(dcEnergyExperience()) << "Error creating thingPower table index in energy log database. Query:" << createThingPowerIndexQuery.lastQuery() << createThingPowerIndexQuery.lastError().text() << "Driver error:" << m_db.lastError().driverText() << "Database error:" << m_db.lastError().databaseText();
-        return false;
-    }
-
     if (!m_db.tables().contains("thingCache")) {
         qCDebug(dcEnergyExperience()) << "No \"thingCache\" table in database. Creating it.";
         QString query("CREATE TABLE IF NOT EXISTS thingCache "
@@ -1330,6 +1320,18 @@ bool EnergyLogger::initDB()
             qCWarning(dcEnergyExperience()) << "Error creating thingCache table in energy log database. Query:" << query << createThingCacheTableQuery.lastError().text() << "Driver error:" << m_db.lastError().driverText() << "Database error:" << m_db.lastError().databaseText();
             return false;
         }
+    }
+
+    // Migrate before loading or resampling history, so all write paths can rely on
+    // one row per sample. Subsequent opens only check the unique index definitions.
+    EnergyLogDatabase::DuplicateCleanupResult cleanup;
+    if (!EnergyLogDatabase::cleanupDuplicates(m_db, cleanup)) {
+        qCWarning(dcEnergyExperience()) << "Failed to clean up duplicate energy samples:" << cleanup.error;
+        return false;
+    }
+    if (cleanup.powerBalanceRowsRemoved > 0 || cleanup.thingPowerRowsRemoved > 0) {
+        qCInfo(dcEnergyExperience()) << "Removed duplicate energy samples. Power balance:"
+                                    << cleanup.powerBalanceRowsRemoved << "Thing power:" << cleanup.thingPowerRowsRemoved;
     }
 
     qCDebug(dcEnergyExperience()) << "Initialized logging DB successfully." << m_db.databaseName();
@@ -1626,7 +1628,7 @@ bool EnergyLogger::insertPowerBalance(const QDateTime &timestamp, SampleRate sam
     }
 
     QSqlQuery query = QSqlQuery(m_db);
-    query.prepare("INSERT INTO powerBalance (timestamp, sampleRate, consumption, production, acquisition, storage, totalConsumption, totalProduction, totalAcquisition, totalReturn) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
+    query.prepare("INSERT OR IGNORE INTO powerBalance (timestamp, sampleRate, consumption, production, acquisition, storage, totalConsumption, totalProduction, totalAcquisition, totalReturn) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
     query.addBindValue(timestamp.toMSecsSinceEpoch());
     query.addBindValue(sampleRate);
     query.addBindValue(consumption);
@@ -1642,7 +1644,9 @@ bool EnergyLogger::insertPowerBalance(const QDateTime &timestamp, SampleRate sam
         qCWarning(dcEnergyExperience()) << "Error logging consumption sample:" << query.lastError() << query.executedQuery();
         return false;
     }
-    emit powerBalanceEntryAdded(sampleRate, PowerBalanceLogEntry(timestamp, consumption, production, acquisition, storage, totalConsumption, totalProduction, totalAcquisition, totalReturn));
+    if (query.numRowsAffected() > 0) {
+        emit powerBalanceEntryAdded(sampleRate, PowerBalanceLogEntry(timestamp, consumption, production, acquisition, storage, totalConsumption, totalProduction, totalAcquisition, totalReturn));
+    }
     return true;
 }
 
@@ -1733,7 +1737,7 @@ bool EnergyLogger::insertThingPower(const QDateTime &timestamp, SampleRate sampl
     }
 
     QSqlQuery query = QSqlQuery(m_db);
-    query.prepare("INSERT INTO thingPower (timestamp, sampleRate, thingId, currentPower, totalConsumption, totalProduction) values (?, ?, ?, ?, ?, ?);");
+    query.prepare("INSERT OR IGNORE INTO thingPower (timestamp, sampleRate, thingId, currentPower, totalConsumption, totalProduction) values (?, ?, ?, ?, ?, ?);");
     query.addBindValue(timestamp.toMSecsSinceEpoch());
     query.addBindValue(sampleRate);
     query.addBindValue(thingId);
@@ -1745,7 +1749,9 @@ bool EnergyLogger::insertThingPower(const QDateTime &timestamp, SampleRate sampl
         qCWarning(dcEnergyExperience()) << "Error logging thing power sample:" << query.lastError() << query.executedQuery();
         return false;
     }
-    emit thingPowerEntryAdded(sampleRate, ThingPowerLogEntry(timestamp, thingId, currentPower, totalConsumption, totalProduction));
+    if (query.numRowsAffected() > 0) {
+        emit thingPowerEntryAdded(sampleRate, ThingPowerLogEntry(timestamp, thingId, currentPower, totalConsumption, totalProduction));
+    }
     return true;
 }
 
