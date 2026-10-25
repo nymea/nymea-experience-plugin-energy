@@ -1,3 +1,10 @@
+nymea-experience-plugin-energy (1.16.2) resolute; urgency=medium
+
+  [ Simon Stürz ]
+  * Fix energy sample repair loop during DST fallback
+
+ -- jenkins <developer@nymea.io>  Sun, 25 Oct 2026 20:27:53 +0100
+
 nymea-experience-plugin-energy (1.16.1) resolute; urgency=medium
 
 
